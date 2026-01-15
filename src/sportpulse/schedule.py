@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from sportpulse.models import GameResult
+from sportpulse.stats import aggregate_record, aggregate_record_in_range, games_in_range
 
 
 @dataclass
@@ -19,23 +20,13 @@ class Schedule:
         self.games.append(game)
 
     def between(self, start: date, end: date) -> list[GameResult]:
-        return [
-            g
-            for g in self.games
-            if g.played_on is not None and start <= g.played_on <= end
-        ]
+        return games_in_range(self.games, start, end)
 
     def record(self) -> dict[str, int]:
-        wins = losses = ties = 0
-        for game in self.games:
-            outcome = game.outcome_for(self.team)
-            if outcome == "win":
-                wins += 1
-            elif outcome == "loss":
-                losses += 1
-            else:
-                ties += 1
-        return {"wins": wins, "losses": losses, "ties": ties}
+        return aggregate_record(self.team, self.games).to_dict()
+
+    def record_in_range(self, start: date, end: date) -> dict[str, int]:
+        return aggregate_record_in_range(self.team, self.games, start, end).to_dict()
 
     def to_json(self) -> dict[str, object]:
         return {
