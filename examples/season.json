@@ -1,0 +1,33 @@
+{
+  "team": "Lakers",
+  "games": [
+    {
+      "home": "Lakers",
+      "away": "Celtics",
+      "home_score": 112,
+      "away_score": 108,
+      "played_on": "2026-01-10"
+    },
+    {
+      "home": "Warriors",
+      "away": "Lakers",
+      "home_score": 99,
+      "away_score": 102,
+      "played_on": "2026-01-12"
+    },
+    {
+      "home": "Lakers",
+      "away": "Knicks",
+      "home_score": 105,
+      "away_score": 101,
+      "played_on": "2026-01-14"
+    },
+    {
+      "home": "Heat",
+      "away": "Lakers",
+      "home_score": 110,
+      "away_score": 110,
+      "played_on": "2026-01-16"
+    }
+  ]
+}

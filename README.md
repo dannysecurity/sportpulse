@@ -28,7 +28,7 @@ sportpulse boxscore --home "Lakers" --away "Celtics" --home-score 112 --away-sco
 sportpulse elo --team-a "Lakers" --rating-a 1580 --team-b "Celtics" --rating-b 1620 --score-a 112 --score-b 108
 
 # Import historical box scores from JSON or CSV
-sportpulse import-boxscores --file data/season.json
+sportpulse import-boxscores --file examples/season.json
 
 # Start the JSON API on port 8080
 sportpulse serve --port 8080
@@ -44,12 +44,82 @@ from sportpulse.parsers import load_box_scores
 game = BoxScore(home="Lakers", away="Celtics", home_score=112, away_score=108)
 print(game.winner())  # "Lakers"
 
-for box in load_box_scores("data/season.csv"):
+for box in load_box_scores("examples/season.csv"):
     print(box.summary())
 
 calc = EloCalculator(k_factor=20)
 updated = calc.update(1580, 1620, home_score=112, away_score=108)
 print(updated)  # (1589.2, 1610.8)
+```
+
+## Sample season data
+
+The `examples/` directory ships a short Lakers sample season you can import as JSON or CSV.
+
+**JSON** (`examples/season.json`) — schedule wrapper with optional dates:
+
+```json
+{
+  "team": "Lakers",
+  "games": [
+    {
+      "home": "Lakers",
+      "away": "Celtics",
+      "home_score": 112,
+      "away_score": 108,
+      "played_on": "2026-01-10"
+    },
+    {
+      "home": "Warriors",
+      "away": "Lakers",
+      "home_score": 99,
+      "away_score": 102,
+      "played_on": "2026-01-12"
+    }
+  ]
+}
+```
+
+**CSV** (`examples/season.csv`) — one game per row with a header:
+
+```csv
+home,away,home_score,away_score,played_on
+Lakers,Celtics,112,108,2026-01-10
+Warriors,Lakers,99,102,2026-01-12
+```
+
+Load the sample season and compute a team record plus ELO trend:
+
+```python
+from datetime import date
+
+from sportpulse.elo import EloCalculator
+from sportpulse.models import EloRating
+from sportpulse.parsers import load_box_scores
+from sportpulse.schedule import Schedule
+
+scores = load_box_scores("examples/season.json")
+schedule = Schedule(team="Lakers")
+for box in scores:
+    schedule.add(box.to_result())
+
+print(schedule.record())  # {"wins": 3, "losses": 0, "ties": 1}
+print(
+    schedule.record_in_range(date(2026, 1, 11), date(2026, 1, 31))
+)  # {"wins": 2, "losses": 0, "ties": 1}
+
+calc = EloCalculator()
+ratings: dict[str, EloRating] = {}
+for box in scores:
+    calc.apply_result(
+        ratings,
+        box.home,
+        box.away,
+        box.home_score,
+        box.away_score,
+        box.played_on,
+    )
+print(calc.trend(ratings["Lakers"]))
 ```
 
 ## Development
