@@ -7,6 +7,7 @@ from datetime import date
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
+from sportpulse.matchups import build_matchups_report, load_matchups
 from sportpulse.parsers import box_scores_to_json, load_box_scores
 from sportpulse.season import build_season_report
 
@@ -69,6 +70,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     season.add_argument("--k-factor", type=float, default=20.0)
 
+    matchups = sub.add_parser(
+        "matchups",
+        help="Show today's slate with odds-lite ELO win probabilities",
+    )
+    matchups.add_argument("--file", required=True, help="Path to scheduled matchups JSON")
+    matchups.add_argument(
+        "--history",
+        help="Optional JSON or CSV season file for ELO ratings (defaults to 1500)",
+    )
+    matchups.add_argument(
+        "--date",
+        help="Calendar day to show (ISO, defaults to today)",
+    )
+    matchups.add_argument("--k-factor", type=float, default=20.0)
+    matchups.add_argument(
+        "--home-advantage",
+        type=float,
+        default=65.0,
+        help="ELO points added for the home team in projections",
+    )
+
     return parser
 
 
@@ -112,6 +134,21 @@ def cmd_import_boxscores(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_matchups(args: argparse.Namespace) -> int:
+    on_date = date.fromisoformat(args.date) if args.date else date.today()
+    slate = load_matchups(args.file)
+    history = load_box_scores(args.history) if args.history else None
+    report = build_matchups_report(
+        slate,
+        on_date=on_date,
+        history=history,
+        k_factor=args.k_factor,
+        home_advantage=args.home_advantage,
+    )
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def cmd_season_report(args: argparse.Namespace) -> int:
     start = date.fromisoformat(args.start_date) if args.start_date else None
     end = date.fromisoformat(args.end_date) if args.end_date else None
@@ -144,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         "serve": cmd_serve,
         "import-boxscores": cmd_import_boxscores,
         "season-report": cmd_season_report,
+        "matchups": cmd_matchups,
     }
     return handlers[args.command](args)
 

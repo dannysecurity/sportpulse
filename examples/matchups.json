@@ -1,0 +1,19 @@
+{
+  "games": [
+    {
+      "home": "Celtics",
+      "away": "Knicks",
+      "scheduled_on": "2026-01-16"
+    },
+    {
+      "home": "Warriors",
+      "away": "Heat",
+      "scheduled_on": "2026-01-16"
+    },
+    {
+      "home": "Lakers",
+      "away": "Nuggets",
+      "scheduled_on": "2026-01-17"
+    }
+  ]
+}
