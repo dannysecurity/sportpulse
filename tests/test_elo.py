@@ -24,3 +24,17 @@ def test_apply_result_tracks_history():
     assert "Lakers" in ratings
     assert ratings["Lakers"].games_played == 1
     assert len(ratings["Lakers"].history) == 1
+
+
+def test_elo_tie_at_equal_ratings_is_neutral():
+    calc = EloCalculator(k_factor=20)
+    new_a, new_b = calc.update(1500, 1500, score_a=110, score_b=110)
+    assert new_a == 1500
+    assert new_b == 1500
+
+
+def test_elo_update_is_zero_sum():
+    calc = EloCalculator(k_factor=20)
+    rating_a, rating_b = 1580, 1620
+    new_a, new_b = calc.update(rating_a, rating_b, score_a=112, score_b=108)
+    assert round(new_a - rating_a + new_b - rating_b, 1) == 0.0
