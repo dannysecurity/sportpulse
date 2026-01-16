@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
 from sportpulse.parsers import box_scores_to_json, load_box_scores
+from sportpulse.season import build_season_report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,6 +47,27 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("json", "csv"),
         help="Input format (defaults to the file extension)",
     )
+
+    season = sub.add_parser(
+        "season-report",
+        help="Compute team record and ELO trend from a season file",
+    )
+    season.add_argument("--team", required=True, help="Team to summarize")
+    season.add_argument("--file", required=True, help="Path to JSON or CSV season data")
+    season.add_argument(
+        "--format",
+        choices=("json", "csv"),
+        help="Input format (defaults to the file extension)",
+    )
+    season.add_argument(
+        "--start-date",
+        help="Inclusive start date (ISO) for a filtered record slice",
+    )
+    season.add_argument(
+        "--end-date",
+        help="Inclusive end date (ISO) for a filtered record slice",
+    )
+    season.add_argument("--k-factor", type=float, default=20.0)
 
     return parser
 
@@ -89,6 +112,28 @@ def cmd_import_boxscores(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_season_report(args: argparse.Namespace) -> int:
+    start = date.fromisoformat(args.start_date) if args.start_date else None
+    end = date.fromisoformat(args.end_date) if args.end_date else None
+    if (start is None) ^ (end is None):
+        print(
+            "season-report: provide both --start-date and --end-date for filtering",
+            file=sys.stderr,
+        )
+        return 2
+
+    scores = load_box_scores(args.file, fmt=args.format)
+    report = build_season_report(
+        args.team,
+        scores,
+        start=start,
+        end=end,
+        k_factor=args.k_factor,
+    )
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -98,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         "elo": cmd_elo,
         "serve": cmd_serve,
         "import-boxscores": cmd_import_boxscores,
+        "season-report": cmd_season_report,
     }
     return handlers[args.command](args)
 

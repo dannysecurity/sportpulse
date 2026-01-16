@@ -30,6 +30,13 @@ sportpulse elo --team-a "Lakers" --rating-a 1580 --team-b "Celtics" --rating-b 1
 # Import historical box scores from JSON or CSV
 sportpulse import-boxscores --file examples/season.json
 
+# Team record and ELO trend from the sample season
+sportpulse season-report --team Lakers --file examples/season.json
+
+# Filtered record for games in a date range (ELO still uses the full file)
+sportpulse season-report --team Lakers --file examples/season.json \
+  --start-date 2026-01-11 --end-date 2026-01-31
+
 # Start the JSON API on port 8080
 sportpulse serve --port 8080
 ```
@@ -90,7 +97,33 @@ Warriors,Lakers,99,102,2026-01-12
 
 Load the sample season and compute a team record plus ELO trend:
 
-```python
+```bash
+sportpulse season-report --team Lakers --file examples/season.json
+```
+
+Example output (truncated):
+
+```json
+{
+  "team": "Lakers",
+  "games_played": 4,
+  "record": {"wins": 3, "losses": 0, "ties": 1},
+  "elo_rating": 1560.5,
+  "elo_trend": [
+    {"played_on": "2026-01-10", "rating": 1500.0},
+    {"played_on": "2026-01-12", "rating": 1523.2}
+  ]
+}
+```
+
+Filter the record to a date window while still replaying every game for ELO:
+
+```bash
+sportpulse season-report --team Lakers --file examples/season.json \
+  --start-date 2026-01-11 --end-date 2026-01-31
+```
+
+The same workflow in Python:
 from datetime import date
 
 from sportpulse.elo import EloCalculator
@@ -121,6 +154,8 @@ for box in scores:
     )
 print(calc.trend(ratings["Lakers"]))
 ```
+
+Both the CLI and library examples above read from `examples/season.json` (or the equivalent CSV).
 
 ## Development
 
