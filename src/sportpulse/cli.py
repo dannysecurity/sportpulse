@@ -6,6 +6,7 @@ import sys
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
+from sportpulse.parsers import box_scores_to_json, load_box_scores
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +34,17 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="Start the JSON API server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8080)
+
+    import_scores = sub.add_parser(
+        "import-boxscores",
+        help="Parse historical box scores from a JSON or CSV file",
+    )
+    import_scores.add_argument("--file", required=True, help="Path to the input file")
+    import_scores.add_argument(
+        "--format",
+        choices=("json", "csv"),
+        help="Input format (defaults to the file extension)",
+    )
 
     return parser
 
@@ -71,6 +83,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import_boxscores(args: argparse.Namespace) -> int:
+    scores = load_box_scores(args.file, fmt=args.format)
+    print(json.dumps(box_scores_to_json(scores), indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -79,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         "boxscore": cmd_boxscore,
         "elo": cmd_elo,
         "serve": cmd_serve,
+        "import-boxscores": cmd_import_boxscores,
     }
     return handlers[args.command](args)
 

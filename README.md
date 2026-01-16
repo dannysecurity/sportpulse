@@ -27,6 +27,9 @@ sportpulse boxscore --home "Lakers" --away "Celtics" --home-score 112 --away-sco
 # Show ELO trend after a result
 sportpulse elo --team-a "Lakers" --rating-a 1580 --team-b "Celtics" --rating-b 1620 --score-a 112 --score-b 108
 
+# Import historical box scores from JSON or CSV
+sportpulse import-boxscores --file data/season.json
+
 # Start the JSON API on port 8080
 sportpulse serve --port 8080
 ```
@@ -36,9 +39,13 @@ sportpulse serve --port 8080
 ```python
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
+from sportpulse.parsers import load_box_scores
 
 game = BoxScore(home="Lakers", away="Celtics", home_score=112, away_score=108)
 print(game.winner())  # "Lakers"
+
+for box in load_box_scores("data/season.csv"):
+    print(box.summary())
 
 calc = EloCalculator(k_factor=20)
 updated = calc.update(1580, 1620, home_score=112, away_score=108)
