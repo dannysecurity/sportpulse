@@ -133,3 +133,67 @@ def test_point_differential_home_and_away():
 def test_point_differential_zero_for_non_participant():
     games = [_game("Celtics", "Warriors", 105, 99)]
     assert point_differential("Lakers", games) == 0
+
+
+def test_point_differential_empty_games():
+    assert point_differential("Lakers", []) == 0
+
+
+def test_point_differential_losses_and_ties():
+    games = [
+        _game("Lakers", "Celtics", 80, 100),
+        _game("Warriors", "Lakers", 110, 110),
+        _game("Lakers", "Suns", 105, 95),
+    ]
+    assert point_differential("Lakers", games) == -10
+
+
+def test_win_pct_all_wins_and_all_losses():
+    wins_only = aggregate_record(
+        "Lakers",
+        [
+            _game("Lakers", "Celtics", 110, 100),
+            _game("Warriors", "Lakers", 95, 105),
+        ],
+    )
+    losses_only = aggregate_record(
+        "Lakers",
+        [
+            _game("Lakers", "Celtics", 90, 100),
+            _game("Warriors", "Lakers", 110, 95),
+        ],
+    )
+    assert wins_only.win_pct == pytest.approx(1.0)
+    assert losses_only.win_pct == pytest.approx(0.0)
+
+
+def test_games_in_range_empty_input():
+    assert games_in_range([], date(2026, 1, 1), date(2026, 1, 31)) == []
+
+
+def test_aggregate_record_in_range_all_undated_games():
+    games = [
+        _game("Lakers", "Celtics", 110, 105),
+        _game("Warriors", "Lakers", 99, 102),
+    ]
+    record = aggregate_record_in_range(
+        "Lakers",
+        games,
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+    )
+    assert record == TeamRecord()
+
+
+def test_non_participant_in_tie_game_counts_as_tie():
+    game = _game("Celtics", "Warriors", 100, 100)
+    record = aggregate_record("Lakers", [game])
+    assert record == TeamRecord(wins=0, losses=0, ties=1)
+
+
+def test_team_record_addition_of_empty_records():
+    empty = TeamRecord()
+    combined = empty + empty
+    assert combined == TeamRecord()
+    assert combined.games_played == 0
+    assert combined.win_pct == 0.0
