@@ -5,6 +5,7 @@ from sportpulse.boxscore import BoxScore
 from sportpulse.cli import main
 from sportpulse.matchups import (
     build_matchups_report,
+    clear_matchups_cache,
     load_matchups,
     matchups_for_date,
     project_matchup,
@@ -21,6 +22,27 @@ def test_load_matchups_from_example():
     assert len(matchups) == 3
     assert matchups[0].home == "Celtics"
     assert matchups[0].scheduled_on == date(2026, 1, 16)
+
+
+def test_load_matchups_reuses_cache_until_file_changes(tmp_path: Path):
+    clear_matchups_cache()
+    path = tmp_path / "matchups.json"
+    path.write_text(
+        '[{"home":"Celtics","away":"Knicks","scheduled_on":"2026-01-16"}]',
+        encoding="utf-8",
+    )
+
+    first = load_matchups(path)
+    second = load_matchups(path)
+    assert first is second
+
+    path.write_text(
+        '[{"home":"Lakers","away":"Heat","scheduled_on":"2026-01-17","venue":"Staples"}]',
+        encoding="utf-8",
+    )
+    reloaded = load_matchups(path)
+    assert reloaded is not first
+    assert reloaded[0].home == "Lakers"
 
 
 def test_matchups_for_date_filters_slate():

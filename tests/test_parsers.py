@@ -5,6 +5,7 @@ import pytest
 
 from sportpulse.parsers import (
     box_scores_to_json,
+    clear_box_score_cache,
     load_box_scores,
     parse_box_score,
     parse_box_scores_from_csv,
@@ -108,6 +109,27 @@ def test_load_box_scores_from_csv_file(tmp_path: Path):
     )
     scores = load_box_scores(path)
     assert scores[0].away_score == 98
+
+
+def test_load_box_scores_reuses_cache_until_file_changes(tmp_path: Path):
+    clear_box_score_cache()
+    path = tmp_path / "games.json"
+    path.write_text(
+        '[{"home":"A","away":"B","home_score":100,"away_score":98}]',
+        encoding="utf-8",
+    )
+
+    first = load_box_scores(path)
+    second = load_box_scores(path)
+    assert first is second
+
+    path.write_text(
+        '[{"home":"A","away":"B","home_score":101,"away_score":98,"played_on":"2026-01-16"}]',
+        encoding="utf-8",
+    )
+    reloaded = load_box_scores(path)
+    assert reloaded is not first
+    assert reloaded[0].home_score == 101
 
 
 def test_box_scores_to_json_matches_summary():

@@ -9,6 +9,8 @@ from sportpulse.boxscore import BoxScore, chronological_order
 from sportpulse.elo import EloCalculator, expected_score
 from sportpulse.models import EloRating
 
+_matchups_cache: dict[str, tuple[int, int, list[Matchup]]] = {}
+
 
 @dataclass(frozen=True)
 class Matchup:
@@ -19,13 +21,12 @@ class Matchup:
     scheduled_on: date
 
 
-def load_matchups(path: Path | str) -> list[Matchup]:
-    """Load scheduled matchups from a JSON file."""
-    file_path = Path(path)
-    if not file_path.is_file():
-        raise FileNotFoundError(f"matchups file not found: {file_path}")
+def clear_matchups_cache() -> None:
+    """Clear the in-process matchups file cache."""
+    _matchups_cache.clear()
 
-    payload = json.loads(file_path.read_text(encoding="utf-8"))
+
+def _parse_matchups_payload(payload: object) -> list[Matchup]:
     if isinstance(payload, dict) and "games" in payload:
         records = payload["games"]
     elif isinstance(payload, list):
@@ -55,6 +56,29 @@ def load_matchups(path: Path | str) -> list[Matchup]:
             raise ValueError(f"matchup at index {index}: invalid scheduled_on: {scheduled_on!r}") from exc
 
         matchups.append(Matchup(home=home, away=away, scheduled_on=on_date))
+    return matchups
+
+
+def load_matchups(path: Path | str) -> list[Matchup]:
+    """Load scheduled matchups from a JSON file.
+
+    Parsed results are cached in-process keyed by resolved path and file
+    modification time so repeated loads skip disk I/O and parsing.
+    """
+    file_path = Path(path)
+    if not file_path.is_file():
+        raise FileNotFoundError(f"matchups file not found: {file_path}")
+
+    resolved_path = file_path.resolve()
+    stat = resolved_path.stat()
+    cache_key = str(resolved_path)
+    cached = _matchups_cache.get(cache_key)
+    if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
+        return cached[2]
+
+    payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+    matchups = _parse_matchups_payload(payload)
+    _matchups_cache[cache_key] = (stat.st_mtime_ns, stat.st_size, matchups)
     return matchups
 
 
