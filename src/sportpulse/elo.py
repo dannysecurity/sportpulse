@@ -27,6 +27,7 @@ class EloCalculator:
         return 0.5, 0.5
 
     def margin_multiplier(self, score_a: int, score_b: int) -> float:
+        """Scale K by log2(margin + 1); one-possession games keep the base K."""
         margin = abs(score_a - score_b)
         if margin <= 1:
             return 1.0
