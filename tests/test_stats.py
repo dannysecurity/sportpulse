@@ -315,3 +315,74 @@ def test_aggregate_record_in_range_only_out_of_window_dated_games():
     )
     assert record == TeamRecord()
     assert record.win_pct == 0.0
+
+
+def test_win_pct_with_losses_and_ties_only():
+    record = aggregate_record(
+        "Lakers",
+        [
+            _game("Lakers", "Celtics", 90, 100),
+            _game("Warriors", "Lakers", 110, 95),
+            _game("Lakers", "Suns", 98, 98),
+        ],
+    )
+    assert record == TeamRecord(wins=0, losses=2, ties=1)
+    assert record.win_pct == pytest.approx(0.0)
+
+
+def test_games_in_range_single_day_window_no_matches():
+    target = date(2026, 1, 15)
+    games = [
+        _game("Lakers", "Celtics", 110, 105, played_on=date(2026, 1, 14)),
+        _game("Warriors", "Lakers", 99, 102, played_on=date(2026, 1, 16)),
+    ]
+    assert games_in_range(games, target, target) == []
+    record = aggregate_record_in_range("Lakers", games, target, target)
+    assert record == TeamRecord()
+    assert record.win_pct == 0.0
+
+
+def test_aggregate_record_in_range_counts_non_participant_ties_in_window():
+    games = [
+        _game("Celtics", "Warriors", 100, 100, played_on=date(2026, 1, 15)),
+        _game("Lakers", "Suns", 105, 95, played_on=date(2026, 1, 20)),
+    ]
+    record = aggregate_record_in_range(
+        "Lakers",
+        games,
+        date(2026, 1, 1),
+        date(2026, 1, 31),
+    )
+    assert record == TeamRecord(wins=1, losses=0, ties=1)
+    assert point_differential("Lakers", games_in_range(games, date(2026, 1, 1), date(2026, 1, 31))) == 10
+
+
+def test_point_differential_accepts_generator_iterable():
+    def game_stream():
+        yield _game("Lakers", "Celtics", 110, 100)
+        yield _game("Warriors", "Lakers", 95, 105)
+
+    assert point_differential("Lakers", game_stream()) == 20
+
+
+def test_point_differential_ignores_non_participant_while_record_counts_tie():
+    games = [
+        _game("Celtics", "Warriors", 100, 100),
+        _game("Lakers", "Suns", 90, 90),
+    ]
+    record = aggregate_record("Lakers", games)
+    assert record == TeamRecord(wins=0, losses=0, ties=2)
+    assert point_differential("Lakers", games) == 0
+
+
+def test_games_in_range_includes_leap_day_feb_29():
+    leap_day = date(2024, 2, 29)
+    games = [
+        _game("Lakers", "Celtics", 110, 105, played_on=date(2024, 2, 28)),
+        _game("Warriors", "Lakers", 99, 102, played_on=leap_day),
+        _game("Lakers", "Suns", 101, 99, played_on=date(2024, 3, 1)),
+    ]
+    filtered = games_in_range(games, leap_day, leap_day)
+    assert filtered == [games[1]]
+    record = aggregate_record_in_range("Lakers", games, leap_day, leap_day)
+    assert record == TeamRecord(wins=1, losses=0, ties=0)
