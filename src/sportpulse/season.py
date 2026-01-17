@@ -26,9 +26,12 @@ def build_season_report(
         "team": team,
         "games_played": len(schedule.games),
         "record": schedule.record(),
+        "point_differential": schedule.point_diff(),
     }
     if start is not None and end is not None:
         report["record_in_range"] = schedule.record_in_range(start, end)
+        report["point_differential_in_range"] = schedule.point_diff_in_range(start, end)
+        report["stats_in_range"] = schedule.team_stats(start=start, end=end).to_dict()
 
     calc = EloCalculator(k_factor=k_factor)
     ratings: dict[str, EloRating] = {}

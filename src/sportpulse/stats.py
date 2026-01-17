@@ -82,3 +82,13 @@ def point_differential(team: str, games: Iterable[GameResult]) -> int:
         elif game.away == team:
             total += game.away_score - game.home_score
     return total
+
+
+def point_differential_in_range(
+    team: str,
+    games: Iterable[GameResult],
+    start: date,
+    end: date,
+) -> int:
+    """Net point differential for dated games inside the inclusive window."""
+    return point_differential(team, games_in_range(games, start, end))

@@ -4,7 +4,14 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from sportpulse.models import GameResult
-from sportpulse.stats import aggregate_record, aggregate_record_in_range, games_in_range
+from sportpulse.rollup import ParticipationPolicy, TeamStats, aggregate_team_stats
+from sportpulse.stats import (
+    aggregate_record,
+    aggregate_record_in_range,
+    games_in_range,
+    point_differential,
+    point_differential_in_range,
+)
 
 
 @dataclass
@@ -27,6 +34,26 @@ class Schedule:
 
     def record_in_range(self, start: date, end: date) -> dict[str, int]:
         return aggregate_record_in_range(self.team, self.games, start, end).to_dict()
+
+    def point_diff(self) -> int:
+        return point_differential(self.team, self.games)
+
+    def point_diff_in_range(self, start: date, end: date) -> int:
+        return point_differential_in_range(self.team, self.games, start, end)
+
+    def team_stats(
+        self,
+        *,
+        start: date | None = None,
+        end: date | None = None,
+    ) -> TeamStats:
+        return aggregate_team_stats(
+            self.team,
+            self.games,
+            policy=ParticipationPolicy.PARTICIPANT_ONLY,
+            start=start,
+            end=end,
+        )
 
     def to_json(self) -> dict[str, object]:
         return {

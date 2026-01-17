@@ -27,6 +27,9 @@ class GameResult:
     def margin(self) -> int:
         return abs(self.home_score - self.away_score)
 
+    def involves(self, team: str) -> bool:
+        return self.home == team or self.away == team
+
     def outcome_for(self, team: str) -> Literal["win", "loss", "tie"]:
         if self.home_score == self.away_score:
             return "tie"
