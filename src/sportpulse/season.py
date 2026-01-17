@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sportpulse.boxscore import BoxScore
+from sportpulse.boxscore import BoxScore, chronological_order
 from sportpulse.elo import EloCalculator
 from sportpulse.models import EloRating
 from sportpulse.schedule import Schedule
@@ -35,7 +35,7 @@ def build_season_report(
 
     calc = EloCalculator(k_factor=k_factor)
     ratings: dict[str, EloRating] = {}
-    for box in scores:
+    for box in chronological_order(scores):
         calc.apply_result(
             ratings,
             box.home,

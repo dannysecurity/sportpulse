@@ -6,6 +6,14 @@ from datetime import date
 from sportpulse.models import GameResult
 
 
+def chronological_order(scores: list[BoxScore]) -> list[BoxScore]:
+    """Sort box scores by ``played_on`` for stable ELO replay.
+
+    Undated games are replayed after all dated games; ties preserve input order.
+    """
+    return sorted(scores, key=lambda box: (box.played_on is None, box.played_on))
+
+
 @dataclass(frozen=True)
 class BoxScore:
     """Single-game box score with basic summary helpers."""

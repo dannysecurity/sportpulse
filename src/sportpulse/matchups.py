@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from sportpulse.boxscore import BoxScore
+from sportpulse.boxscore import BoxScore, chronological_order
 from sportpulse.elo import EloCalculator, expected_score
 from sportpulse.models import EloRating
 
@@ -71,7 +71,7 @@ def ratings_from_history(
     """Replay historical results and return each team's current ELO rating."""
     calc = EloCalculator(k_factor=k_factor)
     ratings: dict[str, EloRating] = {}
-    for box in scores:
+    for box in chronological_order(scores):
         calc.apply_result(
             ratings,
             box.home,

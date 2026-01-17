@@ -1,6 +1,7 @@
 from datetime import date
 from pathlib import Path
 
+from sportpulse.boxscore import BoxScore
 from sportpulse.cli import main
 from sportpulse.matchups import (
     build_matchups_report,
@@ -36,6 +37,18 @@ def test_ratings_from_history_uses_sample_season():
 
     assert ratings["Lakers"] > 1500.0
     assert "Celtics" in ratings
+
+
+def test_ratings_from_history_replays_games_chronologically():
+    games = [
+        BoxScore("Lakers", "Celtics", 112, 108, date(2026, 1, 10)),
+        BoxScore("Warriors", "Lakers", 99, 102, date(2026, 1, 12)),
+        BoxScore("Lakers", "Knicks", 105, 101, date(2026, 1, 14)),
+    ]
+    chronological = ratings_from_history(games)
+    shuffled = ratings_from_history(list(reversed(games)))
+
+    assert shuffled == chronological
 
 
 def test_project_matchup_returns_probabilities():
