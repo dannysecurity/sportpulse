@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
+from sportpulse.matchups import build_matchups_report, load_matchups
+from sportpulse.parsers import load_box_scores
 
 
 class SportPulseHandler(BaseHTTPRequestHandler):
@@ -60,6 +64,29 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     "team_b": {"after": new_b},
                 },
             )
+            return
+
+        if parsed.path == "/matchups":
+            params = parse_qs(parsed.query)
+            try:
+                file_path = params["file"][0]
+                on_date = date.fromisoformat(params.get("date", [date.today().isoformat()])[0])
+                slate = load_matchups(Path(file_path))
+                history_param = params.get("history", [None])[0]
+                history = load_box_scores(history_param) if history_param else None
+                k_factor = float(params.get("k_factor", ["20"])[0])
+                home_advantage = float(params.get("home_advantage", ["65"])[0])
+                report = build_matchups_report(
+                    slate,
+                    on_date=on_date,
+                    history=history,
+                    k_factor=k_factor,
+                    home_advantage=home_advantage,
+                )
+            except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, report)
             return
 
         self._send_json(404, {"error": "not found"})

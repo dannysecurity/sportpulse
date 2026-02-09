@@ -87,6 +87,23 @@ def matchups_for_date(matchups: list[Matchup], on_date: date) -> list[Matchup]:
     return [matchup for matchup in matchups if matchup.scheduled_on == on_date]
 
 
+def probability_to_american_odds(prob: float) -> int:
+    """Convert a win probability (0, 1) to American moneyline odds."""
+    if not 0.0 < prob < 1.0:
+        raise ValueError("probability must be between 0 and 1 exclusive")
+    if prob >= 0.5:
+        return round(-100 * prob / (1 - prob))
+    return round(100 * (1 - prob) / prob)
+
+
+def rating_gap_to_spread(elo_gap: float, *, points_per_100_elo: float = 4.0) -> float:
+    """Estimate the home point spread from an ELO gap (home minus away).
+
+    A negative spread means the home team is favored (e.g. -4.5).
+    """
+    return round(-elo_gap / 100 * points_per_100_elo, 1)
+
+
 def ratings_from_history(
     scores: list[BoxScore],
     *,
@@ -116,8 +133,10 @@ def project_matchup(
     """Odds-lite win probabilities from ELO ratings and home-court adjustment."""
     home_rating = ratings.get(matchup.home, 1500.0)
     away_rating = ratings.get(matchup.away, 1500.0)
-    home_prob = expected_score(home_rating + home_advantage, away_rating)
+    adjusted_home = home_rating + home_advantage
+    home_prob = expected_score(adjusted_home, away_rating)
     away_prob = 1.0 - home_prob
+    elo_gap = adjusted_home - away_rating
     return {
         "home": matchup.home,
         "away": matchup.away,
@@ -126,7 +145,43 @@ def project_matchup(
         "away_rating": round(away_rating, 1),
         "home_win_prob": round(home_prob, 3),
         "away_win_prob": round(away_prob, 3),
+        "home_spread": rating_gap_to_spread(elo_gap),
+        "home_moneyline": probability_to_american_odds(home_prob),
+        "away_moneyline": probability_to_american_odds(away_prob),
     }
+
+
+def format_matchups_table(report: dict[str, object]) -> str:
+    """Render a matchups report as a fixed-width terminal table."""
+    matchups = report.get("matchups", [])
+    if not isinstance(matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    lines = [f"{report['date']} — {len(matchups)} game(s)", ""]
+    header = f"{'MATCHUP':<24} {'SPREAD':>7} {'HOME%':>6} {'AWAY%':>6} {'ML(H)':>7} {'ML(A)':>7}"
+    lines.extend([header, "-" * len(header)])
+
+    for game in matchups:
+        if not isinstance(game, dict):
+            continue
+        label = f"{game['away']} @ {game['home']}"
+        spread = game["home_spread"]
+        spread_text = f"{spread:+.1f}" if isinstance(spread, (int, float)) else str(spread)
+        home_pct = f"{float(game['home_win_prob']) * 100:.0f}%"
+        away_pct = f"{float(game['away_win_prob']) * 100:.0f}%"
+        home_ml = _format_moneyline(game["home_moneyline"])
+        away_ml = _format_moneyline(game["away_moneyline"])
+        lines.append(
+            f"{label:<24} {spread_text:>7} {home_pct:>6} {away_pct:>6} {home_ml:>7} {away_ml:>7}"
+        )
+
+    return "\n".join(lines)
+
+
+def _format_moneyline(value: object) -> str:
+    if not isinstance(value, int):
+        return str(value)
+    return f"+{value}" if value > 0 else str(value)
 
 
 def build_matchups_report(

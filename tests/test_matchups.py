@@ -6,9 +6,12 @@ from sportpulse.cli import main
 from sportpulse.matchups import (
     build_matchups_report,
     clear_matchups_cache,
+    format_matchups_table,
     load_matchups,
     matchups_for_date,
+    probability_to_american_odds,
     project_matchup,
+    rating_gap_to_spread,
     ratings_from_history,
 )
 from sportpulse.parsers import load_box_scores
@@ -83,6 +86,37 @@ def test_project_matchup_returns_probabilities():
     assert projection["home"] == "Celtics"
     assert projection["away_win_prob"] == round(1.0 - projection["home_win_prob"], 3)
     assert 0.0 < projection["home_win_prob"] < 1.0
+    assert isinstance(projection["home_spread"], float)
+    assert isinstance(projection["home_moneyline"], int)
+    assert isinstance(projection["away_moneyline"], int)
+
+
+def test_probability_to_american_odds():
+    assert probability_to_american_odds(0.667) == -200
+    assert probability_to_american_odds(0.333) == 200
+    assert probability_to_american_odds(0.5) == -100
+
+
+def test_rating_gap_to_spread():
+    assert rating_gap_to_spread(100.0) == -4.0
+    assert rating_gap_to_spread(-50.0) == 2.0
+
+
+def test_format_matchups_table(capsys):
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+    )
+
+    table = format_matchups_table(report)
+
+    assert "2026-01-16" in table
+    assert "Knicks @ Celtics" in table
+    assert "SPREAD" in table
+    assert "ML(H)" in table
 
 
 def test_build_matchups_report_for_date():
@@ -97,6 +131,28 @@ def test_build_matchups_report_for_date():
     assert report["date"] == "2026-01-16"
     assert len(report["matchups"]) == 2
     assert all("home_win_prob" in game for game in report["matchups"])
+    assert all("home_moneyline" in game for game in report["matchups"])
+
+
+def test_cli_matchups_table(capsys):
+    exit_code = main(
+        [
+            "matchups",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--format",
+            "table",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Knicks @ Celtics" in output
+    assert "SPREAD" in output
 
 
 def test_cli_matchups_json(capsys):
@@ -116,3 +172,4 @@ def test_cli_matchups_json(capsys):
     output = capsys.readouterr().out
     assert '"date": "2026-01-16"' in output
     assert '"home_win_prob"' in output
+    assert '"home_moneyline"' in output

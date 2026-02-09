@@ -7,6 +7,7 @@ Sports stats toolkit for working with box scores, team schedules, and ELO rating
 - **Box scores** — parse and summarize game results with per-team totals
 - **Schedules** — build and filter team calendars by date range
 - **ELO trends** — track rating changes across a season with configurable K-factor
+- **Matchups** — project today's slate with odds-lite win probabilities, spreads, and moneylines
 - **CLI** — inspect data from the terminal
 - **JSON API** — serve stats over HTTP for integrations
 
@@ -36,6 +37,14 @@ sportpulse season-report --team Lakers --file examples/season.json
 # Filtered record for games in a date range (ELO still uses the full file)
 sportpulse season-report --team Lakers --file examples/season.json \
   --start-date 2026-01-11 --end-date 2026-01-31
+
+# Today's slate with odds-lite projections (ELO win %, spread, moneylines)
+sportpulse matchups --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16
+
+# Same slate in a terminal-friendly table
+sportpulse matchups --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --format table
 
 # Start the JSON API on port 8080
 sportpulse serve --port 8080

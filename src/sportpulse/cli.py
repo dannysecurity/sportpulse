@@ -7,7 +7,7 @@ from datetime import date
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
-from sportpulse.matchups import build_matchups_report, load_matchups
+from sportpulse.matchups import build_matchups_report, format_matchups_table, load_matchups
 from sportpulse.parsers import box_scores_to_json, load_box_scores
 from sportpulse.season import build_season_report
 
@@ -90,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=65.0,
         help="ELO points added for the home team in projections",
     )
+    matchups.add_argument(
+        "--format",
+        choices=("json", "table"),
+        default="json",
+        help="Output format (json or human-readable table)",
+    )
 
     return parser
 
@@ -145,7 +151,10 @@ def cmd_matchups(args: argparse.Namespace) -> int:
         k_factor=args.k_factor,
         home_advantage=args.home_advantage,
     )
-    print(json.dumps(report, indent=2))
+    if args.format == "table":
+        print(format_matchups_table(report))
+    else:
+        print(json.dumps(report, indent=2))
     return 0
 
 
