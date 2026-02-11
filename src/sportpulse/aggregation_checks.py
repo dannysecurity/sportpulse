@@ -178,3 +178,56 @@ def point_diff_counts_aligned(stats: TeamStats) -> bool:
 def count_all_point_diff_bounds(stats: TeamStats) -> bool:
     """Under COUNT_ALL, point-diff games never exceed record games."""
     return stats.games_in_point_diff <= stats.games_in_record
+
+
+def league_record_totals(
+    games: Iterable[GameResult],
+    *,
+    policy: ParticipationPolicy = ParticipationPolicy.PARTICIPANT_ONLY,
+    start: date | None = None,
+    end: date | None = None,
+) -> TeamRecord:
+    """Sum win/loss/tie counts across every team in the league table."""
+    standings = aggregate_standings(
+        games, policy=policy, start=start, end=end
+    )
+    return sum((stats.record for stats in standings.values()), TeamRecord())
+
+
+def check_participant_league_record_balanced(
+    games: Iterable[GameResult],
+    *,
+    policy: ParticipationPolicy = ParticipationPolicy.PARTICIPANT_ONLY,
+    start: date | None = None,
+    end: date | None = None,
+) -> bool:
+    """True when total league wins equal total losses.
+
+    Standard two-team games preserve this invariant under
+    ``PARTICIPANT_ONLY``. Self-matches and ``COUNT_ALL`` phantom outcomes
+    can break the balance.
+    """
+    totals = league_record_totals(
+        games, policy=policy, start=start, end=end
+    )
+    return totals.wins == totals.losses
+
+
+def assert_participant_league_record_balanced(
+    games: Iterable[GameResult],
+    *,
+    policy: ParticipationPolicy = ParticipationPolicy.PARTICIPANT_ONLY,
+    start: date | None = None,
+    end: date | None = None,
+) -> TeamRecord:
+    """Raise ``AggregationInvariantError`` when league wins != league losses."""
+    totals = league_record_totals(
+        games, policy=policy, start=start, end=end
+    )
+    if totals.wins != totals.losses:
+        raise AggregationInvariantError(
+            f"League record balance failed: "
+            f"{totals.wins} wins != {totals.losses} losses "
+            f"({totals.ties} ties)"
+        )
+    return totals
