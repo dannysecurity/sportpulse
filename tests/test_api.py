@@ -39,7 +39,7 @@ def _dispatch_get(path: str) -> tuple[int, dict[str, object]]:
     return response.status, payload
 
 
-def test_matchups_endpoint_returns_projections():
+def test_matchups_endpoint_returns_projections_with_totals():
     matchups_file = EXAMPLES_DIR / "matchups.json"
     history_file = EXAMPLES_DIR / "season.json"
     path = (
@@ -54,9 +54,21 @@ def test_matchups_endpoint_returns_projections():
     game = payload["matchups"][0]
     assert "home_moneyline" in game
     assert "home_spread" in game
+    assert "projected_total" in game
 
 
-def test_matchups_endpoint_requires_file():
+def test_matchups_endpoint_uses_config_defaults():
+    status, payload = _dispatch_get("/matchups?date=2026-01-16")
+
+    assert status == 200
+    assert payload["date"] == "2026-01-16"
+    assert len(payload["matchups"]) == 2
+
+
+def test_matchups_endpoint_requires_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sportpulse.config._builtin_examples_dir", lambda: None)
+
     status, payload = _dispatch_get("/matchups")
 
     assert status == 400

@@ -8,6 +8,11 @@ from pathlib import Path
 from sportpulse.boxscore import BoxScore, chronological_order
 from sportpulse.elo import EloCalculator, expected_score
 from sportpulse.models import EloRating
+from sportpulse.projections import (
+    TeamScoringProfile,
+    build_scoring_profiles,
+    project_game_total,
+)
 
 _matchups_cache: dict[str, tuple[int, int, list[Matchup]]] = {}
 
@@ -171,6 +176,7 @@ def project_matchup(
     ratings: dict[str, float],
     *,
     home_advantage: float = 65.0,
+    scoring_profiles: dict[str, TeamScoringProfile] | None = None,
 ) -> dict[str, object]:
     """Odds-lite win probabilities from ELO ratings and home-court adjustment."""
     home_rating = ratings.get(matchup.home, 1500.0)
@@ -179,7 +185,7 @@ def project_matchup(
     home_prob = expected_score(adjusted_home, away_rating)
     away_prob = 1.0 - home_prob
     elo_gap = adjusted_home - away_rating
-    return {
+    projection: dict[str, object] = {
         "home": matchup.home,
         "away": matchup.away,
         "scheduled_on": matchup.scheduled_on.isoformat(),
@@ -191,6 +197,11 @@ def project_matchup(
         "home_moneyline": probability_to_american_odds(home_prob),
         "away_moneyline": probability_to_american_odds(away_prob),
     }
+    if scoring_profiles is not None:
+        projection.update(
+            project_game_total(matchup.home, matchup.away, scoring_profiles)
+        )
+    return projection
 
 
 def format_matchups_table(report: dict[str, object]) -> str:
@@ -212,7 +223,19 @@ def format_matchups_table(report: dict[str, object]) -> str:
     if not matchups:
         lines.append("No games scheduled for this slate.")
         return "\n".join(lines)
-    header = f"{'MATCHUP':<24} {'SPREAD':>7} {'HOME%':>6} {'AWAY%':>6} {'ML(H)':>7} {'ML(A)':>7}"
+    show_totals = any(
+        isinstance(game, dict) and "projected_total" in game for game in matchups
+    )
+    if show_totals:
+        header = (
+            f"{'MATCHUP':<24} {'SPREAD':>7} {'HOME%':>6} {'AWAY%':>6} "
+            f"{'ML(H)':>7} {'ML(A)':>7} {'PROJ':>5} {'O/U':>6}"
+        )
+    else:
+        header = (
+            f"{'MATCHUP':<24} {'SPREAD':>7} {'HOME%':>6} {'AWAY%':>6} "
+            f"{'ML(H)':>7} {'ML(A)':>7}"
+        )
     lines.extend([header, "-" * len(header)])
 
     for game in matchups:
@@ -225,9 +248,22 @@ def format_matchups_table(report: dict[str, object]) -> str:
         away_pct = f"{float(game['away_win_prob']) * 100:.0f}%"
         home_ml = _format_moneyline(game["home_moneyline"])
         away_ml = _format_moneyline(game["away_moneyline"])
-        lines.append(
-            f"{label:<24} {spread_text:>7} {home_pct:>6} {away_pct:>6} {home_ml:>7} {away_ml:>7}"
+        row = (
+            f"{label:<24} {spread_text:>7} {home_pct:>6} {away_pct:>6} "
+            f"{home_ml:>7} {away_ml:>7}"
         )
+        if show_totals:
+            home_proj = game.get("home_projected_points", "-")
+            away_proj = game.get("away_projected_points", "-")
+            total = game.get("projected_total", "-")
+            proj_text = (
+                f"{home_proj:.0f}-{away_proj:.0f}"
+                if isinstance(home_proj, (int, float)) and isinstance(away_proj, (int, float))
+                else "-"
+            )
+            total_text = f"{total:.1f}" if isinstance(total, (int, float)) else str(total)
+            row = f"{row} {proj_text:>5} {total_text:>6}"
+        lines.append(row)
 
     return "\n".join(lines)
 
@@ -259,12 +295,18 @@ def build_matchups_report(
     if team is not None:
         slate = matchups_involving_team(slate, team)
     ratings = ratings_from_history(history or [], k_factor=k_factor)
+    scoring_profiles = build_scoring_profiles(history) if history else None
     report: dict[str, object] = {
         "date": slate_date.isoformat(),
         "requested_date": requested_date.isoformat(),
         "advanced_to_next_slate": advanced,
         "matchups": [
-            project_matchup(matchup, ratings, home_advantage=home_advantage)
+            project_matchup(
+                matchup,
+                ratings,
+                home_advantage=home_advantage,
+                scoring_profiles=scoring_profiles,
+            )
             for matchup in slate
         ],
     }

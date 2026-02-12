@@ -7,7 +7,7 @@ Sports stats toolkit for working with box scores, team schedules, and ELO rating
 - **Box scores** — parse and summarize game results with per-team totals
 - **Schedules** — build and filter team calendars by date range
 - **ELO trends** — track rating changes across a season with configurable K-factor
-- **Matchups** — project today's slate with odds-lite win probabilities, spreads, and moneylines
+- **Matchups** — project today's slate with odds-lite win probabilities, spreads, moneylines, and scoring totals
 - **CLI** — inspect data from the terminal
 - **JSON API** — serve stats over HTTP for integrations
 
@@ -38,9 +38,12 @@ sportpulse season-report --team Lakers --file examples/season.json
 sportpulse season-report --team Lakers --file examples/season.json \
   --start-date 2026-01-11 --end-date 2026-01-31
 
-# Today's slate with odds-lite projections (ELO win %, spread, moneylines)
+# Today's slate with odds-lite projections (ELO win %, spread, moneylines, O/U totals)
 sportpulse matchups --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16
+
+# Zero-flag today board when sportpulse.json is present (auto-discovers examples/)
+sportpulse today --date 2026-01-16
 
 # Same slate in a terminal-friendly table
 sportpulse matchups --file examples/matchups.json --history examples/season.json \
@@ -57,6 +60,26 @@ sportpulse today --file examples/matchups.json --history examples/season.json \
 # Start the JSON API on port 8080
 sportpulse serve --port 8080
 ```
+
+### Configuration
+
+`sportpulse today` and `sportpulse matchups` can run without `--file` when a config file is present. The CLI walks up from the current directory looking for `sportpulse.json` or `.sportpulse.json`:
+
+```json
+{
+  "matchups_file": "examples/matchups.json",
+  "history_file": "examples/season.json",
+  "k_factor": 20,
+  "home_advantage": 65
+}
+```
+
+Paths are resolved relative to the config file. Environment variables override config values:
+
+- `SPORTPULSE_MATCHUPS_FILE`
+- `SPORTPULSE_HISTORY_FILE`
+
+When no config exists, the CLI falls back to `examples/` in the repo root (editable installs).
 
 ## Library Usage
 

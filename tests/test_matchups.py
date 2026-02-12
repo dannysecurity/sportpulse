@@ -18,6 +18,7 @@ from sportpulse.matchups import (
     resolve_slate_date,
 )
 from sportpulse.parsers import load_box_scores
+from sportpulse.projections import build_scoring_profiles
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
 
@@ -83,8 +84,9 @@ def test_project_matchup_returns_probabilities():
     matchup = load_matchups(EXAMPLES_DIR / "matchups.json")[0]
     scores = load_box_scores(EXAMPLES_DIR / "season.json")
     ratings = ratings_from_history(scores)
+    profiles = build_scoring_profiles(scores)
 
-    projection = project_matchup(matchup, ratings)
+    projection = project_matchup(matchup, ratings, scoring_profiles=profiles)
 
     assert projection["home"] == "Celtics"
     assert projection["away_win_prob"] == round(1.0 - projection["home_win_prob"], 3)
@@ -92,6 +94,8 @@ def test_project_matchup_returns_probabilities():
     assert isinstance(projection["home_spread"], float)
     assert isinstance(projection["home_moneyline"], int)
     assert isinstance(projection["away_moneyline"], int)
+    assert "projected_total" in projection
+    assert projection["projected_total"] > 0
 
 
 def test_probability_to_american_odds():
@@ -120,6 +124,7 @@ def test_format_matchups_table(capsys):
     assert "Knicks @ Celtics" in table
     assert "SPREAD" in table
     assert "ML(H)" in table
+    assert "O/U" in table
 
 
 def test_build_matchups_report_for_date():
@@ -137,6 +142,7 @@ def test_build_matchups_report_for_date():
     assert len(report["matchups"]) == 2
     assert all("home_win_prob" in game for game in report["matchups"])
     assert all("home_moneyline" in game for game in report["matchups"])
+    assert all("projected_total" in game for game in report["matchups"])
 
 
 def test_next_slate_date_skips_empty_days():
@@ -214,6 +220,21 @@ def test_format_matchups_table_empty_slate_message():
 
     assert "0 game(s)" in table
     assert "No games scheduled for this slate." in table
+
+
+def test_cli_today_uses_config_defaults(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--date",
+            "2026-01-16",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Knicks @ Celtics" in output
+    assert "O/U" in output
 
 
 def test_cli_today_defaults_to_table(capsys):

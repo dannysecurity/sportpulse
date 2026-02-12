@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from sportpulse.boxscore import BoxScore
+from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
 from sportpulse.matchups import build_matchups_report, load_matchups
 from sportpulse.parsers import load_box_scores
@@ -69,13 +70,21 @@ class SportPulseHandler(BaseHTTPRequestHandler):
         if parsed.path == "/matchups":
             params = parse_qs(parsed.query)
             try:
-                file_path = params["file"][0]
-                on_date = date.fromisoformat(params.get("date", [date.today().isoformat()])[0])
-                slate = load_matchups(Path(file_path))
+                file_param = params.get("file", [None])[0]
                 history_param = params.get("history", [None])[0]
-                history = load_box_scores(history_param) if history_param else None
-                k_factor = float(params.get("k_factor", ["20"])[0])
-                home_advantage = float(params.get("home_advantage", ["65"])[0])
+                config_param = params.get("config", [None])[0]
+                paths = resolve_matchups_paths(
+                    matchups_file=file_param,
+                    history_file=history_param,
+                    config_file=config_param,
+                )
+                on_date = date.fromisoformat(params.get("date", [date.today().isoformat()])[0])
+                slate = load_matchups(paths.matchups_file)
+                history = load_box_scores(paths.history_file) if paths.history_file else None
+                k_factor = float(params.get("k_factor", [str(paths.k_factor)])[0])
+                home_advantage = float(
+                    params.get("home_advantage", [str(paths.home_advantage)])[0]
+                )
                 advance_if_empty = params.get("next", ["0"])[0].lower() in ("1", "true", "yes")
                 team = params.get("team", [None])[0]
                 report = build_matchups_report(

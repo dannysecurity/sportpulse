@@ -6,6 +6,7 @@ import sys
 from datetime import date
 
 from sportpulse.boxscore import BoxScore
+from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
 from sportpulse.matchups import (
     build_matchups_report,
@@ -17,10 +18,17 @@ from sportpulse.season import build_season_report
 
 
 def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--file", required=True, help="Path to scheduled matchups JSON")
+    parser.add_argument(
+        "--file",
+        help="Path to scheduled matchups JSON (defaults to sportpulse.json or examples/)",
+    )
     parser.add_argument(
         "--history",
-        help="Optional JSON or CSV season file for ELO ratings (defaults to 1500)",
+        help="Optional JSON or CSV season file for ELO ratings and scoring pace",
+    )
+    parser.add_argument(
+        "--config",
+        help="Path to sportpulse.json config (auto-discovered from cwd when omitted)",
     )
     parser.add_argument(
         "--date",
@@ -35,11 +43,11 @@ def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
         "--team",
         help="Only show matchups involving this team",
     )
-    parser.add_argument("--k-factor", type=float, default=20.0)
+    parser.add_argument("--k-factor", type=float, default=None)
     parser.add_argument(
         "--home-advantage",
         type=float,
-        default=65.0,
+        default=None,
         help="ELO points added for the home team in projections",
     )
     parser.add_argument(
@@ -166,14 +174,26 @@ def cmd_import_boxscores(args: argparse.Namespace) -> int:
 
 def cmd_matchups(args: argparse.Namespace) -> int:
     on_date = date.fromisoformat(args.date) if args.date else date.today()
-    slate = load_matchups(args.file)
-    history = load_box_scores(args.history) if args.history else None
+    try:
+        paths = resolve_matchups_paths(
+            matchups_file=args.file,
+            history_file=args.history,
+            config_file=args.config,
+        )
+    except FileNotFoundError as exc:
+        print(f"matchups: {exc}", file=sys.stderr)
+        return 2
+
+    slate = load_matchups(paths.matchups_file)
+    history = load_box_scores(paths.history_file) if paths.history_file else None
+    home_advantage = args.home_advantage if args.home_advantage is not None else paths.home_advantage
+    k_factor = args.k_factor if args.k_factor is not None else paths.k_factor
     report = build_matchups_report(
         slate,
         on_date=on_date,
         history=history,
-        k_factor=args.k_factor,
-        home_advantage=args.home_advantage,
+        k_factor=k_factor,
+        home_advantage=home_advantage,
         advance_if_empty=args.next,
         team=args.team,
     )
