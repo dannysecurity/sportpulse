@@ -7,9 +7,47 @@ from datetime import date
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
-from sportpulse.matchups import build_matchups_report, format_matchups_table, load_matchups
+from sportpulse.matchups import (
+    build_matchups_report,
+    format_matchups_table,
+    load_matchups,
+)
 from sportpulse.parsers import box_scores_to_json, load_box_scores
 from sportpulse.season import build_season_report
+
+
+def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--file", required=True, help="Path to scheduled matchups JSON")
+    parser.add_argument(
+        "--history",
+        help="Optional JSON or CSV season file for ELO ratings (defaults to 1500)",
+    )
+    parser.add_argument(
+        "--date",
+        help="Calendar day to show (ISO, defaults to today)",
+    )
+    parser.add_argument(
+        "--next",
+        action="store_true",
+        help="When the requested day has no games, show the next scheduled slate",
+    )
+    parser.add_argument(
+        "--team",
+        help="Only show matchups involving this team",
+    )
+    parser.add_argument("--k-factor", type=float, default=20.0)
+    parser.add_argument(
+        "--home-advantage",
+        type=float,
+        default=65.0,
+        help="ELO points added for the home team in projections",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("json", "table"),
+        default="json",
+        help="Output format (json or human-readable table)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -72,30 +110,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     matchups = sub.add_parser(
         "matchups",
-        help="Show today's slate with odds-lite ELO win probabilities",
+        help="Show a day's slate with odds-lite ELO win probabilities",
     )
-    matchups.add_argument("--file", required=True, help="Path to scheduled matchups JSON")
-    matchups.add_argument(
-        "--history",
-        help="Optional JSON or CSV season file for ELO ratings (defaults to 1500)",
+    _add_matchups_options(matchups)
+
+    today = sub.add_parser(
+        "today",
+        help="Show today's slate with odds-lite projections (table by default)",
     )
-    matchups.add_argument(
-        "--date",
-        help="Calendar day to show (ISO, defaults to today)",
-    )
-    matchups.add_argument("--k-factor", type=float, default=20.0)
-    matchups.add_argument(
-        "--home-advantage",
-        type=float,
-        default=65.0,
-        help="ELO points added for the home team in projections",
-    )
-    matchups.add_argument(
-        "--format",
-        choices=("json", "table"),
-        default="json",
-        help="Output format (json or human-readable table)",
-    )
+    _add_matchups_options(today)
+    today.set_defaults(format="table")
 
     return parser
 
@@ -150,6 +174,8 @@ def cmd_matchups(args: argparse.Namespace) -> int:
         history=history,
         k_factor=args.k_factor,
         home_advantage=args.home_advantage,
+        advance_if_empty=args.next,
+        team=args.team,
     )
     if args.format == "table":
         print(format_matchups_table(report))
@@ -191,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         "import-boxscores": cmd_import_boxscores,
         "season-report": cmd_season_report,
         "matchups": cmd_matchups,
+        "today": cmd_matchups,
     }
     return handlers[args.command](args)
 

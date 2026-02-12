@@ -46,6 +46,14 @@ sportpulse matchups --file examples/matchups.json --history examples/season.json
 sportpulse matchups --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --format table
 
+# Quick look at today's slate (table output, rolls to next day with --next)
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-15 --next
+
+# Filter to one team's upcoming matchup
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --team Lakers
+
 # Start the JSON API on port 8080
 sportpulse serve --port 8080
 ```

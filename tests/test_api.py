@@ -61,3 +61,27 @@ def test_matchups_endpoint_requires_file():
 
     assert status == 400
     assert "error" in payload
+
+
+def test_matchups_endpoint_advances_to_next_slate():
+    matchups_file = EXAMPLES_DIR / "matchups.json"
+    path = f"/matchups?file={matchups_file}&date=2026-01-15&next=1"
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["requested_date"] == "2026-01-15"
+    assert payload["date"] == "2026-01-16"
+    assert payload["advanced_to_next_slate"] is True
+
+
+def test_matchups_endpoint_team_filter():
+    matchups_file = EXAMPLES_DIR / "matchups.json"
+    path = f"/matchups?file={matchups_file}&date=2026-01-17&team=Lakers"
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["team_filter"] == "Lakers"
+    assert len(payload["matchups"]) == 1
+    assert payload["matchups"][0]["home"] == "Lakers"

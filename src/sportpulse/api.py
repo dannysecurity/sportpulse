@@ -76,12 +76,16 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                 history = load_box_scores(history_param) if history_param else None
                 k_factor = float(params.get("k_factor", ["20"])[0])
                 home_advantage = float(params.get("home_advantage", ["65"])[0])
+                advance_if_empty = params.get("next", ["0"])[0].lower() in ("1", "true", "yes")
+                team = params.get("team", [None])[0]
                 report = build_matchups_report(
                     slate,
                     on_date=on_date,
                     history=history,
                     k_factor=k_factor,
                     home_advantage=home_advantage,
+                    advance_if_empty=advance_if_empty,
+                    team=team,
                 )
             except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
                 self._send_json(400, {"error": str(exc)})

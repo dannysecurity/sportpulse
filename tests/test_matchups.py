@@ -9,10 +9,13 @@ from sportpulse.matchups import (
     format_matchups_table,
     load_matchups,
     matchups_for_date,
+    matchups_involving_team,
+    next_slate_date,
     probability_to_american_odds,
     project_matchup,
     rating_gap_to_spread,
     ratings_from_history,
+    resolve_slate_date,
 )
 from sportpulse.parsers import load_box_scores
 
@@ -129,9 +132,126 @@ def test_build_matchups_report_for_date():
     )
 
     assert report["date"] == "2026-01-16"
+    assert report["requested_date"] == "2026-01-16"
+    assert report["advanced_to_next_slate"] is False
     assert len(report["matchups"]) == 2
     assert all("home_win_prob" in game for game in report["matchups"])
     assert all("home_moneyline" in game for game in report["matchups"])
+
+
+def test_next_slate_date_skips_empty_days():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+
+    assert next_slate_date(matchups, date(2026, 1, 15)) == date(2026, 1, 16)
+    assert next_slate_date(matchups, date(2026, 1, 16)) == date(2026, 1, 16)
+    assert next_slate_date(matchups, date(2026, 1, 18)) is None
+
+
+def test_resolve_slate_date_advances_when_empty():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+
+    unchanged = resolve_slate_date(matchups, date(2026, 1, 16))
+    assert unchanged == (date(2026, 1, 16), False)
+
+    advanced = resolve_slate_date(matchups, date(2026, 1, 15), advance_if_empty=True)
+    assert advanced == (date(2026, 1, 16), True)
+
+
+def test_build_matchups_report_advances_with_next_flag():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 15),
+        advance_if_empty=True,
+    )
+
+    assert report["requested_date"] == "2026-01-15"
+    assert report["date"] == "2026-01-16"
+    assert report["advanced_to_next_slate"] is True
+    assert len(report["matchups"]) == 2
+
+
+def test_matchups_involving_team_filters_slate():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    lakers_day = matchups_involving_team(matchups, "Lakers", on_date=date(2026, 1, 17))
+
+    assert len(lakers_day) == 1
+    assert lakers_day[0].away == "Nuggets"
+
+
+def test_build_matchups_report_team_filter():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        team="Celtics",
+    )
+
+    assert report["team_filter"] == "Celtics"
+    assert len(report["matchups"]) == 1
+    assert report["matchups"][0]["home"] == "Celtics"
+
+
+def test_format_matchups_table_shows_next_slate_banner():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 15),
+        advance_if_empty=True,
+    )
+
+    table = format_matchups_table(report)
+
+    assert "requested 2026-01-15, next slate" in table
+    assert "Knicks @ Celtics" in table
+
+
+def test_format_matchups_table_empty_slate_message():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    report = build_matchups_report(matchups, on_date=date(2026, 2, 1))
+
+    table = format_matchups_table(report)
+
+    assert "0 game(s)" in table
+    assert "No games scheduled for this slate." in table
+
+
+def test_cli_today_defaults_to_table(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "SPREAD" in output
+    assert '"home_win_prob"' not in output
+
+
+def test_cli_matchups_next_flag(capsys):
+    exit_code = main(
+        [
+            "matchups",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--date",
+            "2026-01-15",
+            "--next",
+            "--format",
+            "table",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "requested 2026-01-15, next slate" in output
 
 
 def test_cli_matchups_table(capsys):

@@ -87,6 +87,48 @@ def matchups_for_date(matchups: list[Matchup], on_date: date) -> list[Matchup]:
     return [matchup for matchup in matchups if matchup.scheduled_on == on_date]
 
 
+def next_slate_date(matchups: list[Matchup], on_or_after: date) -> date | None:
+    """Return the earliest scheduled date on or after ``on_or_after``."""
+    future_dates = sorted(
+        {matchup.scheduled_on for matchup in matchups if matchup.scheduled_on >= on_or_after}
+    )
+    return future_dates[0] if future_dates else None
+
+
+def resolve_slate_date(
+    matchups: list[Matchup],
+    on_date: date,
+    *,
+    advance_if_empty: bool = False,
+) -> tuple[date, bool]:
+    """Pick the slate date, optionally rolling forward when the day is empty."""
+    if matchups_for_date(matchups, on_date):
+        return on_date, False
+    if not advance_if_empty:
+        return on_date, False
+    next_date = next_slate_date(matchups, on_date)
+    if next_date is None:
+        return on_date, False
+    return next_date, True
+
+
+def matchups_involving_team(
+    matchups: list[Matchup],
+    team: str,
+    *,
+    on_date: date | None = None,
+) -> list[Matchup]:
+    """Return matchups that include ``team``, optionally limited to one day."""
+    filtered = [
+        matchup
+        for matchup in matchups
+        if matchup.home == team or matchup.away == team
+    ]
+    if on_date is None:
+        return filtered
+    return [matchup for matchup in filtered if matchup.scheduled_on == on_date]
+
+
 def probability_to_american_odds(prob: float) -> int:
     """Convert a win probability (0, 1) to American moneyline odds."""
     if not 0.0 < prob < 1.0:
@@ -157,7 +199,19 @@ def format_matchups_table(report: dict[str, object]) -> str:
     if not isinstance(matchups, list):
         raise ValueError("report matchups must be a list")
 
-    lines = [f"{report['date']} — {len(matchups)} game(s)", ""]
+    title = f"{report['date']} — {len(matchups)} game(s)"
+    if report.get("advanced_to_next_slate"):
+        requested = report.get("requested_date")
+        if isinstance(requested, str):
+            title = f"{title}  (requested {requested}, next slate)"
+    team_filter = report.get("team_filter")
+    if isinstance(team_filter, str):
+        title = f"{title}  [{team_filter}]"
+
+    lines = [title, ""]
+    if not matchups:
+        lines.append("No games scheduled for this slate.")
+        return "\n".join(lines)
     header = f"{'MATCHUP':<24} {'SPREAD':>7} {'HOME%':>6} {'AWAY%':>6} {'ML(H)':>7} {'ML(A)':>7}"
     lines.extend([header, "-" * len(header)])
 
@@ -191,14 +245,29 @@ def build_matchups_report(
     history: list[BoxScore] | None = None,
     k_factor: float = 20.0,
     home_advantage: float = 65.0,
+    advance_if_empty: bool = False,
+    team: str | None = None,
 ) -> dict[str, object]:
     """Filter a slate to one day and attach odds-lite projections."""
-    slate = matchups_for_date(matchups, on_date)
+    requested_date = on_date
+    slate_date, advanced = resolve_slate_date(
+        matchups,
+        on_date,
+        advance_if_empty=advance_if_empty,
+    )
+    slate = matchups_for_date(matchups, slate_date)
+    if team is not None:
+        slate = matchups_involving_team(slate, team)
     ratings = ratings_from_history(history or [], k_factor=k_factor)
-    return {
-        "date": on_date.isoformat(),
+    report: dict[str, object] = {
+        "date": slate_date.isoformat(),
+        "requested_date": requested_date.isoformat(),
+        "advanced_to_next_slate": advanced,
         "matchups": [
             project_matchup(matchup, ratings, home_advantage=home_advantage)
             for matchup in slate
         ],
     }
+    if team is not None:
+        report["team_filter"] = team
+    return report
