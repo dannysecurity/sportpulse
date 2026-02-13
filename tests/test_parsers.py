@@ -32,6 +32,38 @@ def test_parse_box_score_rejects_missing_fields():
         parse_box_score({"home": "A", "away": "B"})
 
 
+def test_parse_box_score_accepts_numeric_strings():
+    score = parse_box_score(
+        {
+            "home": "A",
+            "away": "B",
+            "home_score": "112",
+            "away_score": "108",
+        }
+    )
+    assert score.home_score == 112
+    assert score.away_score == 108
+
+
+def test_parse_box_score_rejects_non_integer_floats():
+    with pytest.raises(ValueError, match="home_score must be an integer"):
+        parse_box_score(
+            {
+                "home": "A",
+                "away": "B",
+                "home_score": 112.5,
+                "away_score": 108,
+            }
+        )
+
+
+def test_parse_json_accepts_float_whole_numbers():
+    text = '{"home":"A","away":"B","home_score":112.0,"away_score":108.0}'
+    scores = parse_box_scores_from_json(text)
+    assert scores[0].home_score == 112
+    assert scores[0].away_score == 108
+
+
 def test_parse_box_score_rejects_invalid_date():
     with pytest.raises(ValueError, match="invalid played_on"):
         parse_box_score(
