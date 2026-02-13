@@ -7,6 +7,7 @@ Sports stats toolkit for working with box scores, team schedules, and ELO rating
 - **Box scores** — parse and summarize game results with per-team totals
 - **Schedules** — build and filter team calendars by date range
 - **ELO trends** — track rating changes across a season with configurable K-factor
+- **Ratings leaderboard** — replay a season file and rank every team by current ELO
 - **Matchups** — project today's slate with odds-lite win probabilities, spreads, moneylines, and scoring totals
 - **CLI** — inspect data from the terminal
 - **JSON API** — serve stats over HTTP for integrations
@@ -33,6 +34,12 @@ sportpulse import-boxscores --file examples/season.json
 
 # Team record and ELO trend from the sample season
 sportpulse season-report --team Lakers --file examples/season.json
+
+# League ELO leaderboard from the sample season
+sportpulse ratings --file examples/season.json
+
+# Same leaderboard in a terminal-friendly table
+sportpulse ratings --file examples/season.json --output table
 
 # Filtered record for games in a date range (ELO still uses the full file)
 sportpulse season-report --team Lakers --file examples/season.json \

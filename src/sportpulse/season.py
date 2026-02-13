@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from sportpulse.boxscore import BoxScore, chronological_order
-from sportpulse.elo import EloCalculator
-from sportpulse.models import EloRating
+from sportpulse.boxscore import BoxScore
+from sportpulse.ratings import replay_elo_ratings
 from sportpulse.schedule import Schedule
 
 
@@ -33,23 +32,14 @@ def build_season_report(
         report["point_differential_in_range"] = schedule.point_diff_in_range(start, end)
         report["stats_in_range"] = schedule.team_stats(start=start, end=end).to_dict()
 
-    calc = EloCalculator(k_factor=k_factor)
-    ratings: dict[str, EloRating] = {}
-    for box in chronological_order(scores):
-        calc.apply_result(
-            ratings,
-            box.home,
-            box.away,
-            box.home_score,
-            box.away_score,
-            box.played_on,
-        )
+    replay = replay_elo_ratings(scores, k_factor=k_factor)
 
-    if team not in ratings:
+    if team not in replay.ratings:
         report["elo_rating"] = 1500.0
         report["elo_trend"] = [{"played_on": None, "rating": 1500.0}]
     else:
-        report["elo_rating"] = ratings[team].rating
-        report["elo_trend"] = calc.trend(ratings[team])
+        team_rating = replay.ratings[team]
+        report["elo_rating"] = team_rating.rating
+        report["elo_trend"] = replay.calculator.trend(team_rating)
 
     return report

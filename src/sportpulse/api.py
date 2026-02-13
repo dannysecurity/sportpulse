@@ -11,6 +11,7 @@ from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
 from sportpulse.matchups import build_matchups_report, load_matchups
 from sportpulse.parsers import load_box_scores
+from sportpulse.ratings import build_ratings_leaderboard
 
 
 class SportPulseHandler(BaseHTTPRequestHandler):
@@ -95,6 +96,26 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     home_advantage=home_advantage,
                     advance_if_empty=advance_if_empty,
                     team=team,
+                )
+            except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, report)
+            return
+
+        if parsed.path == "/ratings":
+            params = parse_qs(parsed.query)
+            try:
+                file_param = params.get("file", [None])[0]
+                if not file_param:
+                    raise ValueError("file query parameter is required")
+                k_factor = float(params.get("k_factor", ["20"])[0])
+                home_advantage = float(params.get("home_advantage", ["0"])[0])
+                scores = load_box_scores(file_param)
+                report = build_ratings_leaderboard(
+                    scores,
+                    k_factor=k_factor,
+                    home_advantage=home_advantage,
                 )
             except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
                 self._send_json(400, {"error": str(exc)})

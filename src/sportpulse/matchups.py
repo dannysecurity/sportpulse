@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from sportpulse.boxscore import BoxScore, chronological_order
-from sportpulse.elo import EloCalculator, expected_score
-from sportpulse.models import EloRating
+from sportpulse.boxscore import BoxScore
+from sportpulse.elo import expected_score
+from sportpulse.ratings import replay_elo_ratings
 from sportpulse.projections import (
     TeamScoringProfile,
     build_scoring_profiles,
@@ -157,18 +157,8 @@ def ratings_from_history(
     k_factor: float = 20.0,
 ) -> dict[str, float]:
     """Replay historical results and return each team's current ELO rating."""
-    calc = EloCalculator(k_factor=k_factor)
-    ratings: dict[str, EloRating] = {}
-    for box in chronological_order(scores):
-        calc.apply_result(
-            ratings,
-            box.home,
-            box.away,
-            box.home_score,
-            box.away_score,
-            box.played_on,
-        )
-    return {team: rating.rating for team, rating in ratings.items()}
+    replay = replay_elo_ratings(scores, k_factor=k_factor)
+    return {team: rating.rating for team, rating in replay.ratings.items()}
 
 
 def project_matchup(

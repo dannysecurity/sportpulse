@@ -14,6 +14,7 @@ from sportpulse.matchups import (
     load_matchups,
 )
 from sportpulse.parsers import box_scores_to_json, load_box_scores
+from sportpulse.ratings import build_ratings_leaderboard, format_ratings_table
 from sportpulse.season import build_season_report
 
 
@@ -116,6 +117,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     season.add_argument("--k-factor", type=float, default=20.0)
 
+    ratings = sub.add_parser(
+        "ratings",
+        help="Show league ELO leaderboard from a season file",
+    )
+    ratings.add_argument("--file", required=True, help="Path to JSON or CSV season data")
+    ratings.add_argument(
+        "--format",
+        choices=("json", "csv"),
+        help="Input format (defaults to the file extension)",
+    )
+    ratings.add_argument("--k-factor", type=float, default=20.0)
+    ratings.add_argument(
+        "--home-advantage",
+        type=float,
+        default=0.0,
+        help="ELO points credited to the home team during replay",
+    )
+    ratings.add_argument(
+        "--output",
+        choices=("json", "table"),
+        default="json",
+        help="Output format (json or human-readable table)",
+    )
+
     matchups = sub.add_parser(
         "matchups",
         help="Show a day's slate with odds-lite ELO win probabilities",
@@ -204,6 +229,20 @@ def cmd_matchups(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ratings(args: argparse.Namespace) -> int:
+    scores = load_box_scores(args.file, fmt=args.format)
+    report = build_ratings_leaderboard(
+        scores,
+        k_factor=args.k_factor,
+        home_advantage=args.home_advantage,
+    )
+    if args.output == "table":
+        print(format_ratings_table(report))
+    else:
+        print(json.dumps(report, indent=2))
+    return 0
+
+
 def cmd_season_report(args: argparse.Namespace) -> int:
     start = date.fromisoformat(args.start_date) if args.start_date else None
     end = date.fromisoformat(args.end_date) if args.end_date else None
@@ -236,6 +275,7 @@ def main(argv: list[str] | None = None) -> int:
         "serve": cmd_serve,
         "import-boxscores": cmd_import_boxscores,
         "season-report": cmd_season_report,
+        "ratings": cmd_ratings,
         "matchups": cmd_matchups,
         "today": cmd_matchups,
     }

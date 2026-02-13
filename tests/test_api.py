@@ -97,3 +97,22 @@ def test_matchups_endpoint_team_filter():
     assert payload["team_filter"] == "Lakers"
     assert len(payload["matchups"]) == 1
     assert payload["matchups"][0]["home"] == "Lakers"
+
+
+def test_ratings_endpoint_returns_leaderboard():
+    history_file = EXAMPLES_DIR / "season.json"
+    path = f"/ratings?file={history_file}"
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["games_replayed"] == 4
+    assert payload["ratings"][0]["team"] == "Lakers"
+    assert payload["ratings"][0]["rank"] == 1
+
+
+def test_ratings_endpoint_requires_file():
+    status, payload = _dispatch_get("/ratings")
+
+    assert status == 400
+    assert "error" in payload
