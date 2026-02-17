@@ -166,6 +166,8 @@ def project_matchup(
     ratings: dict[str, float],
     *,
     home_advantage: float = 65.0,
+    points_per_100_elo: float = 4.0,
+    home_court_points: float = 2.5,
     scoring_profiles: dict[str, TeamScoringProfile] | None = None,
 ) -> dict[str, object]:
     """Odds-lite win probabilities from ELO ratings and home-court adjustment."""
@@ -183,15 +185,121 @@ def project_matchup(
         "away_rating": round(away_rating, 1),
         "home_win_prob": round(home_prob, 3),
         "away_win_prob": round(away_prob, 3),
-        "home_spread": rating_gap_to_spread(elo_gap),
+        "home_spread": rating_gap_to_spread(elo_gap, points_per_100_elo=points_per_100_elo),
         "home_moneyline": probability_to_american_odds(home_prob),
         "away_moneyline": probability_to_american_odds(away_prob),
     }
     if scoring_profiles is not None:
         projection.update(
-            project_game_total(matchup.home, matchup.away, scoring_profiles)
+            project_game_total(
+                matchup.home,
+                matchup.away,
+                scoring_profiles,
+                home_court_points=home_court_points,
+            )
         )
     return projection
+
+
+def build_slate_summary(matchups: list[dict[str, object]]) -> dict[str, object]:
+    """Summarize odds-lite projections across a day's slate."""
+    if not matchups:
+        return {
+            "games": 0,
+            "home_favorites": 0,
+            "away_favorites": 0,
+            "pick_em_games": 0,
+            "avg_projected_total": None,
+            "highest_total_game": None,
+            "biggest_spread_game": None,
+            "closest_game": None,
+            "has_scoring_projections": False,
+        }
+
+    home_favorites = 0
+    away_favorites = 0
+    pick_em_games = 0
+    totals: list[float] = []
+    highest_total_game: dict[str, object] | None = None
+    biggest_spread_game: dict[str, object] | None = None
+    closest_game: dict[str, object] | None = None
+    biggest_spread_magnitude = -1.0
+    closest_spread = float("inf")
+
+    for game in matchups:
+        spread = game.get("home_spread")
+        if not isinstance(spread, (int, float)):
+            continue
+
+        if spread < 0:
+            home_favorites += 1
+        elif spread > 0:
+            away_favorites += 1
+        else:
+            pick_em_games += 1
+
+        spread_magnitude = abs(float(spread))
+        if spread_magnitude > biggest_spread_magnitude:
+            biggest_spread_magnitude = spread_magnitude
+            biggest_spread_game = game
+        if spread_magnitude < closest_spread:
+            closest_spread = spread_magnitude
+            closest_game = game
+
+        total = game.get("projected_total")
+        if isinstance(total, (int, float)):
+            totals.append(float(total))
+            if highest_total_game is None or float(total) > float(
+                highest_total_game.get("projected_total", 0)
+            ):
+                highest_total_game = game
+
+    avg_total = round(sum(totals) / len(totals), 1) if totals else None
+
+    def _matchup_label(game: dict[str, object] | None) -> str | None:
+        if game is None:
+            return None
+        home = game.get("home")
+        away = game.get("away")
+        if isinstance(home, str) and isinstance(away, str):
+            return f"{away} @ {home}"
+        return None
+
+    return {
+        "games": len(matchups),
+        "home_favorites": home_favorites,
+        "away_favorites": away_favorites,
+        "pick_em_games": pick_em_games,
+        "avg_projected_total": avg_total,
+        "highest_total_game": _matchup_label(highest_total_game),
+        "biggest_spread_game": _matchup_label(biggest_spread_game),
+        "closest_game": _matchup_label(closest_game),
+        "has_scoring_projections": bool(totals),
+    }
+
+
+def _format_slate_summary(summary: dict[str, object]) -> str:
+    """Render a one-line odds-lite slate digest for terminal output."""
+    games = summary.get("games", 0)
+    if not isinstance(games, int) or games == 0:
+        return ""
+
+    parts = [
+        f"{summary['home_favorites']} home fav",
+        f"{summary['away_favorites']} away fav",
+    ]
+    if summary.get("pick_em_games"):
+        parts.append(f"{summary['pick_em_games']} pick'em")
+
+    if summary.get("has_scoring_projections") and summary.get("avg_projected_total") is not None:
+        parts.append(f"avg O/U {summary['avg_projected_total']}")
+
+    if summary.get("biggest_spread_game"):
+        parts.append(f"biggest spread: {summary['biggest_spread_game']}")
+    if summary.get("closest_game"):
+        parts.append(f"closest: {summary['closest_game']}")
+
+    return "Slate: " + ", ".join(parts)
 
 
 def format_matchups_table(report: dict[str, object]) -> str:
@@ -255,6 +363,10 @@ def format_matchups_table(report: dict[str, object]) -> str:
             row = f"{row} {proj_text:>5} {total_text:>6}"
         lines.append(row)
 
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games"):
+        lines.extend(["", _format_slate_summary(summary)])
+
     return "\n".join(lines)
 
 
@@ -271,6 +383,8 @@ def build_matchups_report(
     history: list[BoxScore] | None = None,
     k_factor: float = 20.0,
     home_advantage: float = 65.0,
+    points_per_100_elo: float = 4.0,
+    home_court_points: float = 2.5,
     advance_if_empty: bool = False,
     team: str | None = None,
 ) -> dict[str, object]:
@@ -286,19 +400,23 @@ def build_matchups_report(
         slate = matchups_involving_team(slate, team)
     ratings = ratings_from_history(history or [], k_factor=k_factor)
     scoring_profiles = build_scoring_profiles(history) if history else None
+    projected = [
+        project_matchup(
+            matchup,
+            ratings,
+            home_advantage=home_advantage,
+            points_per_100_elo=points_per_100_elo,
+            home_court_points=home_court_points,
+            scoring_profiles=scoring_profiles,
+        )
+        for matchup in slate
+    ]
     report: dict[str, object] = {
         "date": slate_date.isoformat(),
         "requested_date": requested_date.isoformat(),
         "advanced_to_next_slate": advanced,
-        "matchups": [
-            project_matchup(
-                matchup,
-                ratings,
-                home_advantage=home_advantage,
-                scoring_profiles=scoring_profiles,
-            )
-            for matchup in slate
-        ],
+        "matchups": projected,
+        "summary": build_slate_summary(projected),
     }
     if team is not None:
         report["team_filter"] = team

@@ -2,5 +2,7 @@
   "matchups_file": "examples/matchups.json",
   "history_file": "examples/season.json",
   "k_factor": 20,
-  "home_advantage": 65
+  "home_advantage": 65,
+  "points_per_100_elo": 4,
+  "home_court_points": 2.5
 }

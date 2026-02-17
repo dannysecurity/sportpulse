@@ -38,7 +38,14 @@ def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--next",
         action="store_true",
+        default=None,
         help="When the requested day has no games, show the next scheduled slate",
+    )
+    parser.add_argument(
+        "--no-next",
+        action="store_false",
+        dest="next",
+        help="Only show games on the requested day",
     )
     parser.add_argument(
         "--team",
@@ -50,6 +57,18 @@ def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=None,
         help="ELO points added for the home team in projections",
+    )
+    parser.add_argument(
+        "--points-per-100-elo",
+        type=float,
+        default=None,
+        help="Point spread per 100 ELO rating gap (default 4.0)",
+    )
+    parser.add_argument(
+        "--home-court-points",
+        type=float,
+        default=None,
+        help="Scoring boost applied to the home team in O/U projections",
     )
     parser.add_argument(
         "--format",
@@ -152,7 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show today's slate with odds-lite projections (table by default)",
     )
     _add_matchups_options(today)
-    today.set_defaults(format="table")
+    today.set_defaults(format="table", next=True)
 
     return parser
 
@@ -211,21 +230,43 @@ def cmd_matchups(args: argparse.Namespace) -> int:
 
     slate = load_matchups(paths.matchups_file)
     history = load_box_scores(paths.history_file) if paths.history_file else None
+    if history is None:
+        print(
+            "matchups: no history file configured; O/U totals omitted "
+            "(pass --history or set history_file in sportpulse.json)",
+            file=sys.stderr,
+        )
     home_advantage = args.home_advantage if args.home_advantage is not None else paths.home_advantage
     k_factor = args.k_factor if args.k_factor is not None else paths.k_factor
+    points_per_100_elo = (
+        args.points_per_100_elo
+        if args.points_per_100_elo is not None
+        else paths.points_per_100_elo
+    )
+    home_court_points = (
+        args.home_court_points
+        if args.home_court_points is not None
+        else paths.home_court_points
+    )
     report = build_matchups_report(
         slate,
         on_date=on_date,
         history=history,
         k_factor=k_factor,
         home_advantage=home_advantage,
-        advance_if_empty=args.next,
+        points_per_100_elo=points_per_100_elo,
+        home_court_points=home_court_points,
+        advance_if_empty=args.next if args.next is not None else False,
         team=args.team,
     )
     if args.format == "table":
         print(format_matchups_table(report))
     else:
         print(json.dumps(report, indent=2))
+
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games", 0) == 0:
+        return 1
     return 0
 
 

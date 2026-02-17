@@ -16,6 +16,8 @@ class SportPulseConfig:
     history_file: Path | None = None
     k_factor: float = 20.0
     home_advantage: float = 65.0
+    points_per_100_elo: float = 4.0
+    home_court_points: float = 2.5
 
 
 def _builtin_examples_dir() -> Path | None:
@@ -89,12 +91,16 @@ def load_config(config_path: Path | None = None) -> SportPulseConfig:
 
     k_factor = float(payload.get("k_factor", 20.0))
     home_advantage = float(payload.get("home_advantage", 65.0))
+    points_per_100_elo = float(payload.get("points_per_100_elo", 4.0))
+    home_court_points = float(payload.get("home_court_points", 2.5))
 
     return SportPulseConfig(
         matchups_file=matchups_file,
         history_file=history_file,
         k_factor=k_factor,
         home_advantage=home_advantage,
+        points_per_100_elo=points_per_100_elo,
+        home_court_points=home_court_points,
     )
 
 
@@ -124,4 +130,6 @@ def resolve_matchups_paths(
         history_file=resolved_history,
         k_factor=config.k_factor,
         home_advantage=config.home_advantage,
+        points_per_100_elo=config.points_per_100_elo,
+        home_court_points=config.home_court_points,
     )

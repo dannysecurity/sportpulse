@@ -56,9 +56,13 @@ sportpulse today --date 2026-01-16
 sportpulse matchups --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --format table
 
-# Quick look at today's slate (table output, rolls to next day with --next)
+# Quick look at today's slate (table output; auto-rolls to the next day when empty)
 sportpulse today --file examples/matchups.json --history examples/season.json \
-  --date 2026-01-15 --next
+  --date 2026-01-15
+
+# Force the exact requested day even when it has no games
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-15 --no-next
 
 # Filter to one team's upcoming matchup
 sportpulse today --file examples/matchups.json --history examples/season.json \
@@ -77,9 +81,15 @@ sportpulse serve --port 8080
   "matchups_file": "examples/matchups.json",
   "history_file": "examples/season.json",
   "k_factor": 20,
-  "home_advantage": 65
+  "home_advantage": 65,
+  "points_per_100_elo": 4,
+  "home_court_points": 2.5
 }
 ```
+
+`points_per_100_elo` controls how ELO gaps translate to point spreads. `home_court_points` adjusts projected scoring totals for the home team.
+
+The `today` and `matchups` commands include an odds-lite `summary` block (JSON) and a one-line slate digest (table) with favorite counts, average projected total, and notable matchups.
 
 Paths are resolved relative to the config file. Environment variables override config values:
 

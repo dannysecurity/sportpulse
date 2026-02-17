@@ -24,6 +24,8 @@ def test_load_config_from_repo_examples():
     assert config.history_file == (REPO_ROOT / "examples/season.json").resolve()
     assert config.k_factor == 20.0
     assert config.home_advantage == 65.0
+    assert config.points_per_100_elo == 4.0
+    assert config.home_court_points == 2.5
 
 
 def test_load_config_uses_env_overrides(monkeypatch, tmp_path: Path):

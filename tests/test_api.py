@@ -55,6 +55,8 @@ def test_matchups_endpoint_returns_projections_with_totals():
     assert "home_moneyline" in game
     assert "home_spread" in game
     assert "projected_total" in game
+    assert payload["summary"]["games"] == 2
+    assert payload["summary"]["has_scoring_projections"] is True
 
 
 def test_matchups_endpoint_uses_config_defaults():

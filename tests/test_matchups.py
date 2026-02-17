@@ -5,6 +5,7 @@ from sportpulse.boxscore import BoxScore
 from sportpulse.cli import main
 from sportpulse.matchups import (
     build_matchups_report,
+    build_slate_summary,
     clear_matchups_cache,
     format_matchups_table,
     load_matchups,
@@ -107,6 +108,104 @@ def test_probability_to_american_odds():
 def test_rating_gap_to_spread():
     assert rating_gap_to_spread(100.0) == -4.0
     assert rating_gap_to_spread(-50.0) == 2.0
+    assert rating_gap_to_spread(100.0, points_per_100_elo=5.0) == -5.0
+
+
+def test_build_slate_summary_counts_favorites_and_totals():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+    )
+
+    summary = report["summary"]
+
+    assert summary["games"] == 2
+    assert summary["home_favorites"] + summary["away_favorites"] + summary["pick_em_games"] == 2
+    assert summary["has_scoring_projections"] is True
+    assert summary["avg_projected_total"] is not None
+    assert summary["biggest_spread_game"] is not None
+    assert summary["closest_game"] is not None
+
+
+def test_build_slate_summary_empty_slate():
+    summary = build_slate_summary([])
+
+    assert summary["games"] == 0
+    assert summary["avg_projected_total"] is None
+    assert summary["has_scoring_projections"] is False
+
+
+def test_format_matchups_table_includes_slate_summary():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+    )
+
+    table = format_matchups_table(report)
+
+    assert "Slate:" in table
+    assert "home fav" in table
+    assert "avg O/U" in table
+
+
+def test_project_matchup_respects_spread_scale():
+    matchup = load_matchups(EXAMPLES_DIR / "matchups.json")[0]
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    ratings = ratings_from_history(scores)
+
+    default_spread = project_matchup(matchup, ratings)["home_spread"]
+    wider_spread = project_matchup(
+        matchup,
+        ratings,
+        points_per_100_elo=8.0,
+    )["home_spread"]
+
+    assert isinstance(default_spread, float)
+    assert isinstance(wider_spread, float)
+    assert abs(wider_spread) > abs(default_spread)
+
+
+def test_cli_matchups_empty_slate_exit_code(capsys):
+    exit_code = main(
+        [
+            "matchups",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--date",
+            "2026-02-01",
+            "--format",
+            "table",
+        ]
+    )
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "0 game(s)" in output
+
+
+def test_cli_today_auto_advances_to_next_slate(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-15",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "requested 2026-01-15, next slate" in output
+    assert "Knicks @ Celtics" in output
 
 
 def test_format_matchups_table(capsys):

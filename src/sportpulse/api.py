@@ -86,6 +86,18 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                 home_advantage = float(
                     params.get("home_advantage", [str(paths.home_advantage)])[0]
                 )
+                points_per_100_elo = float(
+                    params.get(
+                        "points_per_100_elo",
+                        [str(paths.points_per_100_elo)],
+                    )[0]
+                )
+                home_court_points = float(
+                    params.get(
+                        "home_court_points",
+                        [str(paths.home_court_points)],
+                    )[0]
+                )
                 advance_if_empty = params.get("next", ["0"])[0].lower() in ("1", "true", "yes")
                 team = params.get("team", [None])[0]
                 report = build_matchups_report(
@@ -94,6 +106,8 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     history=history,
                     k_factor=k_factor,
                     home_advantage=home_advantage,
+                    points_per_100_elo=points_per_100_elo,
+                    home_court_points=home_court_points,
                     advance_if_empty=advance_if_empty,
                     team=team,
                 )
