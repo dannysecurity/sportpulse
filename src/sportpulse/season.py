@@ -4,7 +4,7 @@ from datetime import date
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.ratings import replay_elo_ratings
-from sportpulse.schedule import Schedule
+from sportpulse.schedule import Schedule, schedule_from_scores
 
 
 def build_season_report(
@@ -16,10 +16,7 @@ def build_season_report(
     k_factor: float = 20.0,
 ) -> dict[str, object]:
     """Summarize a team's record and ELO trend from parsed box scores."""
-    schedule = Schedule(team=team)
-    for box in scores:
-        if box.home == team or box.away == team:
-            schedule.add(box.to_result())
+    schedule = schedule_from_scores(team, scores)
 
     report: dict[str, object] = {
         "team": team,
