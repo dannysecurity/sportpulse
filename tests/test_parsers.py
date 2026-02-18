@@ -106,6 +106,49 @@ def test_parse_json_schedule_wrapper():
     assert scores[0].home == "Lakers"
 
 
+def test_parse_box_score_strips_team_names():
+    score = parse_box_score(
+        {
+            "home": " Lakers ",
+            "away": " Celtics ",
+            "home_score": 112,
+            "away_score": 108,
+        }
+    )
+    assert score.home == "Lakers"
+    assert score.away == "Celtics"
+
+
+def test_parse_box_score_rejects_blank_team_names():
+    with pytest.raises(ValueError, match="home and away must be non-empty strings"):
+        parse_box_score(
+            {
+                "home": "   ",
+                "away": "B",
+                "home_score": 100,
+                "away_score": 90,
+            }
+        )
+
+
+def test_parse_csv_skips_blank_rows():
+    text = """home,away,home_score,away_score
+A,B,100,98
+
+C,D,90,88
+"""
+    scores = parse_box_scores_from_csv(text)
+    assert len(scores) == 2
+    assert scores[0].home == "A"
+    assert scores[1].home == "C"
+
+
+def test_parse_csv_strips_utf8_bom():
+    text = "\ufeffhome,away,home_score,away_score\nA,B,100,98\n"
+    scores = parse_box_scores_from_csv(text)
+    assert scores[0].home == "A"
+
+
 def test_parse_csv_with_optional_date():
     text = """home,away,home_score,away_score,played_on
 Lakers,Celtics,112,108,2026-01-14

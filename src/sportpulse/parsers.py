@@ -47,6 +47,10 @@ def parse_box_score(data: dict[str, object]) -> BoxScore:
     away = data["away"]
     if not isinstance(home, str) or not isinstance(away, str):
         raise ValueError("home and away must be strings")
+    home = home.strip()
+    away = away.strip()
+    if not home or not away:
+        raise ValueError("home and away must be non-empty strings")
     home_score = _coerce_score(data["home_score"], "home_score")
     away_score = _coerce_score(data["away_score"], "away_score")
 
@@ -99,9 +103,21 @@ def parse_box_scores_from_json(text: str) -> list[BoxScore]:
     return scores
 
 
+def _strip_utf8_bom(text: str) -> str:
+    """Remove a leading UTF-8 BOM from exported spreadsheet files."""
+    if text.startswith("\ufeff"):
+        return text[1:]
+    return text
+
+
+def _csv_row_is_blank(row: dict[str, str | None]) -> bool:
+    """Return True when every CSV cell is empty or whitespace."""
+    return all((value or "").strip() == "" for value in row.values())
+
+
 def parse_box_scores_from_csv(text: str) -> list[BoxScore]:
     """Parse historical box scores from CSV with a header row."""
-    reader = csv.DictReader(StringIO(text))
+    reader = csv.DictReader(StringIO(_strip_utf8_bom(text)))
     if reader.fieldnames is None:
         raise ValueError("CSV must include a header row")
 
@@ -112,6 +128,9 @@ def parse_box_scores_from_csv(text: str) -> list[BoxScore]:
 
     scores: list[BoxScore] = []
     for row_number, row in enumerate(reader, start=2):
+        if _csv_row_is_blank(row):
+            continue
+
         data: dict[str, object] = {
             "home": (row.get("home") or "").strip(),
             "away": (row.get("away") or "").strip(),
