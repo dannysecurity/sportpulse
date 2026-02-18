@@ -118,3 +118,37 @@ def test_ratings_endpoint_requires_file():
 
     assert status == 400
     assert "error" in payload
+
+
+def test_standings_endpoint_returns_table():
+    history_file = EXAMPLES_DIR / "season.json"
+    path = f"/standings?file={history_file}"
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["games_counted"] == 4
+    assert payload["standings"][0]["team"] == "Lakers"
+    assert payload["standings"][0]["record"]["wins"] == 3
+
+
+def test_standings_endpoint_date_range():
+    history_file = EXAMPLES_DIR / "season.json"
+    path = (
+        f"/standings?file={history_file}"
+        "&start_date=2026-01-11&end_date=2026-01-31"
+    )
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["games_counted"] == 3
+    teams = [row["team"] for row in payload["standings"]]
+    assert "Celtics" not in teams
+
+
+def test_standings_endpoint_requires_file():
+    status, payload = _dispatch_get("/standings")
+
+    assert status == 400
+    assert "error" in payload

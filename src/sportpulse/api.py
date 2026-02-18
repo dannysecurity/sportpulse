@@ -12,6 +12,7 @@ from sportpulse.elo import EloCalculator
 from sportpulse.matchups import build_matchups_report, load_matchups
 from sportpulse.parsers import load_box_scores
 from sportpulse.ratings import build_ratings_leaderboard
+from sportpulse.standings import build_standings_report
 
 
 class SportPulseHandler(BaseHTTPRequestHandler):
@@ -130,6 +131,36 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     scores,
                     k_factor=k_factor,
                     home_advantage=home_advantage,
+                )
+            except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, report)
+            return
+
+        if parsed.path == "/standings":
+            params = parse_qs(parsed.query)
+            try:
+                file_param = params.get("file", [None])[0]
+                if not file_param:
+                    raise ValueError("file query parameter is required")
+                start_param = params.get("start_date", [None])[0]
+                end_param = params.get("end_date", [None])[0]
+                start = date.fromisoformat(start_param) if start_param else None
+                end = date.fromisoformat(end_param) if end_param else None
+                if (start is None) ^ (end is None):
+                    raise ValueError(
+                        "provide both start_date and end_date for filtering"
+                    )
+                tie_breaker = params.get("tie_breaker", ["win_pct"])[0]
+                if tie_breaker not in ("win_pct", "point_diff", "team_name"):
+                    raise ValueError("tie_breaker must be win_pct, point_diff, or team_name")
+                scores = load_box_scores(file_param)
+                report = build_standings_report(
+                    scores,
+                    start=start,
+                    end=end,
+                    tie_breaker=tie_breaker,  # type: ignore[arg-type]
                 )
             except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
                 self._send_json(400, {"error": str(exc)})

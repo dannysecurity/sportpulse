@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Iterable, Literal
 
+from sportpulse.boxscore import BoxScore
 from sportpulse.models import GameResult
 from sportpulse.rollup import ParticipationPolicy, TeamStats, aggregate_team_stats
 from sportpulse.stats import TeamRecord, aggregate_record, games_in_range
@@ -143,3 +144,79 @@ def games_for_teams(
         for game in games
         if game.home in team_set or game.away in team_set
     ]
+
+
+def build_standings_report(
+    scores: list[BoxScore],
+    *,
+    start: date | None = None,
+    end: date | None = None,
+    tie_breaker: Literal["win_pct", "point_diff", "team_name"] = "win_pct",
+) -> dict[str, object]:
+    """Build a ranked league table from parsed box scores."""
+    games = [box.to_result() for box in scores]
+    table = aggregate_standings(games, start=start, end=end)
+    ranked = rank_standings(table, tie_breaker=tie_breaker)
+
+    if start is not None and end is not None:
+        games_counted = len(games_in_range(games, start, end))
+    else:
+        games_counted = len(games)
+
+    rows: list[dict[str, object]] = []
+    for rank, row in enumerate(ranked, start=1):
+        rows.append(
+            {
+                "rank": rank,
+                "team": row.team,
+                "record": row.record.to_dict(),
+                "win_pct": round(row.win_pct, 3),
+                "point_differential": row.point_differential,
+                "avg_margin": round(row.stats.avg_margin, 1),
+            }
+        )
+
+    report: dict[str, object] = {
+        "games_counted": games_counted,
+        "tie_breaker": tie_breaker,
+        "standings": rows,
+    }
+    if start is not None and end is not None:
+        report["start_date"] = start.isoformat()
+        report["end_date"] = end.isoformat()
+    return report
+
+
+def format_standings_table(report: dict[str, object]) -> str:
+    """Render a standings report as a fixed-width terminal table."""
+    standings = report.get("standings", [])
+    if not isinstance(standings, list):
+        raise ValueError("report standings must be a list")
+
+    games = report.get("games_counted", 0)
+    title = f"League standings — {games} game(s)"
+    lines = [title, ""]
+    if not standings:
+        lines.append("No games to rank.")
+        return "\n".join(lines)
+
+    header = f"{'RK':>3} {'TEAM':<16} {'W-L-T':>7} {'PCT':>6} {'DIFF':>6} {'AVG':>6}"
+    lines.extend([header, "-" * len(header)])
+    for row in standings:
+        if not isinstance(row, dict):
+            continue
+        record = row.get("record", {})
+        if not isinstance(record, dict):
+            continue
+        wins = record.get("wins", 0)
+        losses = record.get("losses", 0)
+        ties = record.get("ties", 0)
+        wlt = f"{wins}-{losses}-{ties}"
+        win_pct = row.get("win_pct", 0.0)
+        diff = row.get("point_differential", 0)
+        avg = row.get("avg_margin", 0.0)
+        lines.append(
+            f"{row['rank']:>3} {row['team']:<16} {wlt:>7} "
+            f"{win_pct:>6.3f} {diff:>+6d} {avg:>+6.1f}"
+        )
+    return "\n".join(lines)

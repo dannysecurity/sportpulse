@@ -8,6 +8,7 @@ Sports stats toolkit for working with box scores, team schedules, and ELO rating
 - **Schedules** — build and filter team calendars by date range
 - **ELO trends** — track rating changes across a season with configurable K-factor
 - **Ratings leaderboard** — replay a season file and rank every team by current ELO
+- **League standings** — rank every team by win/loss record and point differential
 - **Matchups** — project today's slate with odds-lite win probabilities, spreads, moneylines, and scoring totals
 - **CLI** — inspect data from the terminal
 - **JSON API** — serve stats over HTTP for integrations
@@ -40,6 +41,16 @@ sportpulse ratings --file examples/season.json
 
 # Same leaderboard in a terminal-friendly table
 sportpulse ratings --file examples/season.json --output table
+
+# League win/loss standings from the sample season
+sportpulse standings --file examples/season.json
+
+# Same standings in a terminal-friendly table
+sportpulse standings --file examples/season.json --output table
+
+# Standings for a date window (only teams that played in the range appear)
+sportpulse standings --file examples/season.json \
+  --start-date 2026-01-11 --end-date 2026-01-31
 
 # Filtered record for games in a date range (ELO still uses the full file)
 sportpulse season-report --team Lakers --file examples/season.json \
@@ -118,7 +129,16 @@ print(updated)  # (1589.2, 1610.8)
 
 ## Sample season data
 
-The `examples/` directory ships a short Lakers sample season you can import as JSON or CSV.
+The `examples/` directory ships a short four-game sample season spanning five teams (Lakers, Celtics, Warriors, Knicks, and Heat). Import it as JSON or CSV to try season reports, ELO leaderboards, and league standings.
+
+| Date | Matchup | Score |
+|------|---------|-------|
+| 2026-01-10 | Lakers vs Celtics | 112–108 |
+| 2026-01-12 | Warriors @ Lakers | 99–102 |
+| 2026-01-14 | Lakers vs Knicks | 105–101 |
+| 2026-01-16 | Heat @ Lakers | 110–110 (tie) |
+
+Lakers finish **3–0–1** (+11 point differential); every other team appears once in the file.
 
 **JSON** (`examples/season.json`) — schedule wrapper with optional dates:
 
@@ -180,13 +200,36 @@ sportpulse season-report --team Lakers --file examples/season.json \
   --start-date 2026-01-11 --end-date 2026-01-31
 ```
 
+League standings from the same file (Lakers lead on win percentage and point differential):
+
+```bash
+sportpulse standings --file examples/season.json --output table
+```
+
+Example output:
+
+```
+League standings — 4 game(s)
+
+ RK TEAM               W-L-T    PCT   DIFF    AVG
+-------------------------------------------------
+  1 Lakers             3-0-1  0.750    +11   +2.8
+  2 Heat               0-0-1  0.000     +0   +0.0
+  3 Warriors           0-1-0  0.000     -3   -3.0
+  4 Celtics            0-1-0  0.000     -4   -4.0
+  5 Knicks             0-1-0  0.000     -4   -4.0
+```
+
 The same workflow in Python:
+
+```python
 from datetime import date
 
 from sportpulse.elo import EloCalculator
 from sportpulse.models import EloRating
 from sportpulse.parsers import load_box_scores
 from sportpulse.schedule import Schedule
+from sportpulse.standings import build_standings_report
 
 scores = load_box_scores("examples/season.json")
 schedule = Schedule(team="Lakers")
@@ -210,9 +253,23 @@ for box in scores:
         box.played_on,
     )
 print(calc.trend(ratings["Lakers"]))
+
+standings = build_standings_report(scores)
+print(standings["standings"][0]["team"])  # "Lakers"
 ```
 
 Both the CLI and library examples above read from `examples/season.json` (or the equivalent CSV).
+
+### JSON API
+
+When the API server is running (`sportpulse serve --port 8080`), the sample season is available over HTTP:
+
+```bash
+curl "http://127.0.0.1:8080/standings?file=examples/season.json"
+curl "http://127.0.0.1:8080/ratings?file=examples/season.json"
+```
+
+Optional query parameters for `/standings`: `start_date`, `end_date`, and `tie_breaker` (`win_pct`, `point_diff`, or `team_name`).
 
 ## Development
 

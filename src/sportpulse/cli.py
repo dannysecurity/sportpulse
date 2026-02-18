@@ -16,6 +16,7 @@ from sportpulse.matchups import (
 from sportpulse.parsers import box_scores_to_json, load_box_scores
 from sportpulse.ratings import build_ratings_leaderboard, format_ratings_table
 from sportpulse.season import build_season_report
+from sportpulse.standings import build_standings_report, format_standings_table
 
 
 def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
@@ -160,6 +161,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format (json or human-readable table)",
     )
 
+    league = sub.add_parser(
+        "standings",
+        help="Show league win/loss standings from a season file",
+    )
+    league.add_argument("--file", required=True, help="Path to JSON or CSV season data")
+    league.add_argument(
+        "--format",
+        choices=("json", "csv"),
+        help="Input format (defaults to the file extension)",
+    )
+    league.add_argument(
+        "--start-date",
+        help="Inclusive start date (ISO) for a filtered standings slice",
+    )
+    league.add_argument(
+        "--end-date",
+        help="Inclusive end date (ISO) for a filtered standings slice",
+    )
+    league.add_argument(
+        "--tie-breaker",
+        choices=("win_pct", "point_diff", "team_name"),
+        default="win_pct",
+        help="Primary sort key when ranking teams",
+    )
+    league.add_argument(
+        "--output",
+        choices=("json", "table"),
+        default="json",
+        help="Output format (json or human-readable table)",
+    )
+
     matchups = sub.add_parser(
         "matchups",
         help="Show a day's slate with odds-lite ELO win probabilities",
@@ -284,6 +316,30 @@ def cmd_ratings(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_standings(args: argparse.Namespace) -> int:
+    start = date.fromisoformat(args.start_date) if args.start_date else None
+    end = date.fromisoformat(args.end_date) if args.end_date else None
+    if (start is None) ^ (end is None):
+        print(
+            "standings: provide both --start-date and --end-date for filtering",
+            file=sys.stderr,
+        )
+        return 2
+
+    scores = load_box_scores(args.file, fmt=args.format)
+    report = build_standings_report(
+        scores,
+        start=start,
+        end=end,
+        tie_breaker=args.tie_breaker,
+    )
+    if args.output == "table":
+        print(format_standings_table(report))
+    else:
+        print(json.dumps(report, indent=2))
+    return 0
+
+
 def cmd_season_report(args: argparse.Namespace) -> int:
     start = date.fromisoformat(args.start_date) if args.start_date else None
     end = date.fromisoformat(args.end_date) if args.end_date else None
@@ -317,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
         "import-boxscores": cmd_import_boxscores,
         "season-report": cmd_season_report,
         "ratings": cmd_ratings,
+        "standings": cmd_standings,
         "matchups": cmd_matchups,
         "today": cmd_matchups,
     }
