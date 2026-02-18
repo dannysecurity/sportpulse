@@ -54,3 +54,13 @@ def test_home_advantage_reduces_home_win_rating_gain():
     home_win, _ = calc.update(1500, 1500, score_a=110, score_b=100, team_a_home=True)
     away_win, _ = calc.update(1500, 1500, score_a=110, score_b=100, team_a_home=False)
     assert away_win - 1500 > home_win - 1500
+
+
+def test_margin_multiplier_respects_cap():
+    calc = EloCalculator(k_factor=20, max_margin_multiplier=2.0)
+    assert calc.margin_multiplier(130, 100) == 2.0
+
+    capped_winner, _ = calc.update(1500, 1500, score_a=130, score_b=100)
+    uncapped_calc = EloCalculator(k_factor=20)
+    uncapped_winner, _ = uncapped_calc.update(1500, 1500, score_a=130, score_b=100)
+    assert capped_winner - 1500 < uncapped_winner - 1500

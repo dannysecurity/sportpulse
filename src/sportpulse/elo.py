@@ -18,6 +18,7 @@ class EloCalculator:
 
     k_factor: float = 20.0
     home_advantage: float = 0.0
+    max_margin_multiplier: float | None = None
 
     def actual_score(self, score_a: int, score_b: int) -> tuple[float, float]:
         if score_a > score_b:
@@ -27,11 +28,18 @@ class EloCalculator:
         return 0.5, 0.5
 
     def margin_multiplier(self, score_a: int, score_b: int) -> float:
-        """Scale K by log2(margin + 1); one-possession games keep the base K."""
+        """Scale K by log2(margin + 1); one-possession games keep the base K.
+
+        When ``max_margin_multiplier`` is set, blowout scaling is capped so a
+        single lopsided result cannot move team power ratings too far.
+        """
         margin = abs(score_a - score_b)
         if margin <= 1:
             return 1.0
-        return math.log(margin + 1) / math.log(2)
+        multiplier = math.log(margin + 1) / math.log(2)
+        if self.max_margin_multiplier is not None:
+            return min(multiplier, self.max_margin_multiplier)
+        return multiplier
 
     def update(
         self,
