@@ -1,0 +1,33 @@
+{
+  "source": "historical-export",
+  "games": [
+    {
+      "homeTeam": "Lakers",
+      "awayTeam": "Celtics",
+      "homeScore": 112,
+      "awayScore": 108,
+      "gameDate": "2026-01-10"
+    },
+    {
+      "homeTeam": "Warriors",
+      "awayTeam": "Lakers",
+      "homeScore": 99,
+      "awayScore": 102,
+      "gameDate": "2026-01-12"
+    },
+    {
+      "homeTeam": "Lakers",
+      "awayTeam": "Knicks",
+      "homeScore": 105,
+      "awayScore": 101,
+      "gameDate": "2026-01-14"
+    },
+    {
+      "homeTeam": "Heat",
+      "awayTeam": "Lakers",
+      "homeScore": 110,
+      "awayScore": 110,
+      "gameDate": "2026-01-16"
+    }
+  ]
+}
