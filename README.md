@@ -271,6 +271,15 @@ curl "http://127.0.0.1:8080/ratings?file=examples/season.json"
 
 Optional query parameters for `/standings`: `start_date`, `end_date`, and `tie_breaker` (`win_pct`, `point_diff`, or `team_name`).
 
+## Caching
+
+SportPulse keeps parsed schedule files and derived reports in an in-process cache keyed by file modification time. Repeated CLI or API calls against unchanged data skip disk I/O, JSON parsing, and ELO replay.
+
+- **File loaders** — `load_box_scores`, `load_matchups`, and `load_team_schedule` cache parsed file contents.
+- **Report loaders** — `load_matchups_report` and `load_season_report` (in `sportpulse.schedule_cache`) cache fully built matchups and season reports.
+
+Caches invalidate automatically when a source file's mtime or size changes. Call `clear_schedule_report_cache()` (or the module-specific `clear_*_cache()` helpers) in tests or long-running processes when you need a fresh read.
+
 ## Development
 
 ```bash

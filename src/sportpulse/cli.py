@@ -8,14 +8,10 @@ from datetime import date
 from sportpulse.boxscore import BoxScore
 from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
-from sportpulse.matchups import (
-    build_matchups_report,
-    format_matchups_table,
-    load_matchups,
-)
+from sportpulse.matchups import format_matchups_table
 from sportpulse.parsers import box_scores_to_json, load_box_scores
 from sportpulse.ratings import build_ratings_leaderboard, format_ratings_table
-from sportpulse.season import build_season_report
+from sportpulse.schedule_cache import load_matchups_report, load_season_report
 from sportpulse.standings import build_standings_report, format_standings_table
 
 
@@ -260,9 +256,7 @@ def cmd_matchups(args: argparse.Namespace) -> int:
         print(f"matchups: {exc}", file=sys.stderr)
         return 2
 
-    slate = load_matchups(paths.matchups_file)
-    history = load_box_scores(paths.history_file) if paths.history_file else None
-    if history is None:
+    if paths.history_file is None:
         print(
             "matchups: no history file configured; O/U totals omitted "
             "(pass --history or set history_file in sportpulse.json)",
@@ -280,10 +274,10 @@ def cmd_matchups(args: argparse.Namespace) -> int:
         if args.home_court_points is not None
         else paths.home_court_points
     )
-    report = build_matchups_report(
-        slate,
+    report = load_matchups_report(
+        paths.matchups_file,
         on_date=on_date,
-        history=history,
+        history_file=paths.history_file,
         k_factor=k_factor,
         home_advantage=home_advantage,
         points_per_100_elo=points_per_100_elo,
@@ -350,10 +344,10 @@ def cmd_season_report(args: argparse.Namespace) -> int:
         )
         return 2
 
-    scores = load_box_scores(args.file, fmt=args.format)
-    report = build_season_report(
+    report = load_season_report(
+        args.file,
         args.team,
-        scores,
+        fmt=args.format,
         start=start,
         end=end,
         k_factor=args.k_factor,

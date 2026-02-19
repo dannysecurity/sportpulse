@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 from sportpulse.boxscore import BoxScore
 from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
-from sportpulse.matchups import build_matchups_report, load_matchups
+from sportpulse.schedule_cache import load_matchups_report
 from sportpulse.parsers import load_box_scores
 from sportpulse.ratings import build_ratings_leaderboard
 from sportpulse.standings import build_standings_report
@@ -81,8 +81,6 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     config_file=config_param,
                 )
                 on_date = date.fromisoformat(params.get("date", [date.today().isoformat()])[0])
-                slate = load_matchups(paths.matchups_file)
-                history = load_box_scores(paths.history_file) if paths.history_file else None
                 k_factor = float(params.get("k_factor", [str(paths.k_factor)])[0])
                 home_advantage = float(
                     params.get("home_advantage", [str(paths.home_advantage)])[0]
@@ -101,10 +99,10 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                 )
                 advance_if_empty = params.get("next", ["0"])[0].lower() in ("1", "true", "yes")
                 team = params.get("team", [None])[0]
-                report = build_matchups_report(
-                    slate,
+                report = load_matchups_report(
+                    paths.matchups_file,
                     on_date=on_date,
-                    history=history,
+                    history_file=paths.history_file,
                     k_factor=k_factor,
                     home_advantage=home_advantage,
                     points_per_100_elo=points_per_100_elo,
