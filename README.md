@@ -159,6 +159,20 @@ Lakers finish **3–0–1** (+11 point differential); every other team appears o
       "home_score": 99,
       "away_score": 102,
       "played_on": "2026-01-12"
+    },
+    {
+      "home": "Lakers",
+      "away": "Knicks",
+      "home_score": 105,
+      "away_score": 101,
+      "played_on": "2026-01-14"
+    },
+    {
+      "home": "Heat",
+      "away": "Lakers",
+      "home_score": 110,
+      "away_score": 110,
+      "played_on": "2026-01-16"
     }
   ]
 }
@@ -170,6 +184,8 @@ Lakers finish **3–0–1** (+11 point differential); every other team appears o
 home,away,home_score,away_score,played_on
 Lakers,Celtics,112,108,2026-01-10
 Warriors,Lakers,99,102,2026-01-12
+Lakers,Knicks,105,101,2026-01-14
+Heat,Lakers,110,110,2026-01-16
 ```
 
 Load the sample season and compute a team record plus ELO trend:
@@ -178,17 +194,21 @@ Load the sample season and compute a team record plus ELO trend:
 sportpulse season-report --team Lakers --file examples/season.json
 ```
 
-Example output (truncated):
+Example output:
 
 ```json
 {
   "team": "Lakers",
   "games_played": 4,
   "record": {"wins": 3, "losses": 0, "ties": 1},
+  "point_differential": 11,
   "elo_rating": 1560.5,
   "elo_trend": [
     {"played_on": "2026-01-10", "rating": 1500.0},
-    {"played_on": "2026-01-12", "rating": 1523.2}
+    {"played_on": "2026-01-12", "rating": 1523.2},
+    {"played_on": "2026-01-14", "rating": 1541.9},
+    {"played_on": "2026-01-16", "rating": 1562.3},
+    {"played_on": null, "rating": 1560.5}
   ]
 }
 ```
@@ -218,6 +238,57 @@ League standings — 4 game(s)
   3 Warriors           0-1-0  0.000     -3   -3.0
   4 Celtics            0-1-0  0.000     -4   -4.0
   5 Knicks             0-1-0  0.000     -4   -4.0
+```
+
+ELO leaderboard from the same file (Lakers lead after replaying all four games):
+
+```bash
+sportpulse ratings --file examples/season.json --output table
+```
+
+Example output:
+
+```
+ELO leaderboard — 4 game(s) replayed
+
+ RK TEAM                 ELO   GP       Δ
+-----------------------------------------
+  1 Lakers            1560.5    4   +60.5
+  2 Heat              1501.8    1    +1.8
+  3 Warriors          1481.3    1   -18.7
+  4 Knicks            1479.6    1   -20.4
+  5 Celtics           1476.8    1   -23.2
+```
+
+Project today's slate using the sample season as rating history (`examples/matchups.json` lists upcoming games; `examples/season.json` supplies ELO inputs):
+
+```bash
+sportpulse matchups --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16
+```
+
+Example output (truncated to the first matchup):
+
+```json
+{
+  "date": "2026-01-16",
+  "matchups": [
+    {
+      "home": "Celtics",
+      "away": "Knicks",
+      "home_rating": 1476.8,
+      "away_rating": 1479.6,
+      "home_win_prob": 0.589,
+      "home_spread": -2.5,
+      "projected_total": 213.0
+    }
+  ],
+  "summary": {
+    "games": 2,
+    "avg_projected_total": 211.8,
+    "closest_game": "Heat @ Warriors"
+  }
+}
 ```
 
 The same workflow in Python:
