@@ -11,7 +11,7 @@ from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
 from sportpulse.schedule_cache import load_matchups_report
 from sportpulse.parsers import load_box_scores
-from sportpulse.ratings import build_ratings_leaderboard
+from sportpulse.ratings import build_rating_update_report, build_ratings_leaderboard
 from sportpulse.standings import build_standings_report
 
 
@@ -129,6 +129,40 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     scores,
                     k_factor=k_factor,
                     home_advantage=home_advantage,
+                )
+            except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, report)
+            return
+
+        if parsed.path == "/ratings/update":
+            params = parse_qs(parsed.query)
+            try:
+                history_param = params.get("history", [None])[0]
+                history = load_box_scores(history_param) if history_param else []
+                k_factor = float(params.get("k_factor", ["20"])[0])
+                home_advantage = float(params.get("home_advantage", ["0"])[0])
+                include_leaderboard = params.get("leaderboard", ["0"])[0].lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                )
+                played_on_param = params.get("played_on", [None])[0]
+                played_on = date.fromisoformat(played_on_param) if played_on_param else None
+                game = BoxScore(
+                    home=params["home"][0],
+                    away=params["away"][0],
+                    home_score=int(params["home_score"][0]),
+                    away_score=int(params["away_score"][0]),
+                    played_on=played_on,
+                )
+                report = build_rating_update_report(
+                    game,
+                    history=history,
+                    k_factor=k_factor,
+                    home_advantage=home_advantage,
+                    include_leaderboard=include_leaderboard,
                 )
             except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
                 self._send_json(400, {"error": str(exc)})

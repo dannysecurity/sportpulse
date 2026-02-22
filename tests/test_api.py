@@ -120,6 +120,30 @@ def test_ratings_endpoint_requires_file():
     assert "error" in payload
 
 
+def test_ratings_update_endpoint_applies_new_game():
+    history_file = EXAMPLES_DIR / "season.json"
+    path = (
+        f"/ratings/update?history={history_file}"
+        "&home=Lakers&away=Celtics&home_score=120&away_score=100"
+        "&played_on=2026-02-01&leaderboard=1"
+    )
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["games_replayed"] == 4
+    assert payload["updates"]["Lakers"]["after"] > payload["updates"]["Lakers"]["before"]
+    assert payload["updates"]["Celtics"]["after"] < payload["updates"]["Celtics"]["before"]
+    assert len(payload["ratings"]) == 5
+
+
+def test_ratings_update_endpoint_requires_game_params():
+    status, payload = _dispatch_get("/ratings/update")
+
+    assert status == 400
+    assert "error" in payload
+
+
 def test_standings_endpoint_returns_table():
     history_file = EXAMPLES_DIR / "season.json"
     path = f"/standings?file={history_file}"

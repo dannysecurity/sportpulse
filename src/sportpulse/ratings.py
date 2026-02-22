@@ -60,6 +60,69 @@ def rank_elo_ratings(ratings: dict[str, EloRating]) -> list[dict[str, object]]:
     return rows
 
 
+def _team_update_entry(before: float, after: float) -> dict[str, object]:
+    return {
+        "before": before,
+        "after": after,
+        "delta": round(after - before, 1),
+    }
+
+
+def apply_game_to_ratings(
+    ratings: dict[str, EloRating],
+    game: BoxScore,
+    *,
+    calculator: EloCalculator,
+) -> dict[str, dict[str, object]]:
+    """Apply one result to in-memory ratings and return per-team update details."""
+    home_before = ratings.get(
+        game.home, EloRating(team=game.home, rating=DEFAULT_STARTING_RATING)
+    ).rating
+    away_before = ratings.get(
+        game.away, EloRating(team=game.away, rating=DEFAULT_STARTING_RATING)
+    ).rating
+
+    new_home, new_away = calculator.apply_result(
+        ratings,
+        game.home,
+        game.away,
+        game.home_score,
+        game.away_score,
+        game.played_on,
+    )
+    return {
+        game.home: _team_update_entry(home_before, new_home),
+        game.away: _team_update_entry(away_before, new_away),
+    }
+
+
+def build_rating_update_report(
+    game: BoxScore,
+    *,
+    history: list[BoxScore] | None = None,
+    k_factor: float = 20.0,
+    home_advantage: float = 0.0,
+    include_leaderboard: bool = False,
+) -> dict[str, object]:
+    """Bootstrap ratings from history, apply a new result, and return an update report."""
+    replay = replay_elo_ratings(
+        history or [],
+        k_factor=k_factor,
+        home_advantage=home_advantage,
+    )
+    updates = apply_game_to_ratings(replay.ratings, game, calculator=replay.calculator)
+    report: dict[str, object] = {
+        "game": game.summary(),
+        "k_factor": k_factor,
+        "home_advantage": home_advantage,
+        "games_replayed": replay.games_replayed,
+        "updates": updates,
+    }
+    if include_leaderboard:
+        report["ratings"] = rank_elo_ratings(replay.ratings)
+    return report
+
+
 def build_ratings_leaderboard(
     scores: list[BoxScore],
     *,

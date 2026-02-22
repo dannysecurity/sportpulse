@@ -10,7 +10,11 @@ from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
 from sportpulse.matchups import format_matchups_table
 from sportpulse.parsers import box_scores_to_json, load_box_scores
-from sportpulse.ratings import build_ratings_leaderboard, format_ratings_table
+from sportpulse.ratings import (
+    build_rating_update_report,
+    build_ratings_leaderboard,
+    format_ratings_table,
+)
 from sportpulse.schedule_cache import load_matchups_report, load_season_report
 from sportpulse.standings import build_standings_report, format_standings_table
 
@@ -157,6 +161,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format (json or human-readable table)",
     )
 
+    update_ratings = sub.add_parser(
+        "update-ratings",
+        help="Apply a new game result to ELO ratings bootstrapped from history",
+    )
+    update_ratings.add_argument(
+        "--history",
+        help="Optional JSON or CSV season file to bootstrap ratings (defaults to 1500)",
+    )
+    update_ratings.add_argument("--home", required=True, help="Home team name")
+    update_ratings.add_argument("--away", required=True, help="Away team name")
+    update_ratings.add_argument("--home-score", type=int, required=True)
+    update_ratings.add_argument("--away-score", type=int, required=True)
+    update_ratings.add_argument(
+        "--played-on",
+        help="Game date (ISO) recorded in rating history",
+    )
+    update_ratings.add_argument(
+        "--format",
+        choices=("json", "csv"),
+        help="Input format for --history (defaults to the file extension)",
+    )
+    update_ratings.add_argument("--k-factor", type=float, default=20.0)
+    update_ratings.add_argument(
+        "--home-advantage",
+        type=float,
+        default=0.0,
+        help="ELO points credited to the home team during replay and update",
+    )
+    update_ratings.add_argument(
+        "--leaderboard",
+        action="store_true",
+        help="Include the full ranked leaderboard after the update",
+    )
+
     league = sub.add_parser(
         "standings",
         help="Show league win/loss standings from a season file",
@@ -296,6 +334,31 @@ def cmd_matchups(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_update_ratings(args: argparse.Namespace) -> int:
+    history = (
+        load_box_scores(args.history, fmt=args.format)
+        if args.history
+        else []
+    )
+    played_on = date.fromisoformat(args.played_on) if args.played_on else None
+    game = BoxScore(
+        home=args.home,
+        away=args.away,
+        home_score=args.home_score,
+        away_score=args.away_score,
+        played_on=played_on,
+    )
+    report = build_rating_update_report(
+        game,
+        history=history,
+        k_factor=args.k_factor,
+        home_advantage=args.home_advantage,
+        include_leaderboard=args.leaderboard,
+    )
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def cmd_ratings(args: argparse.Namespace) -> int:
     scores = load_box_scores(args.file, fmt=args.format)
     report = build_ratings_leaderboard(
@@ -367,6 +430,7 @@ def main(argv: list[str] | None = None) -> int:
         "import-boxscores": cmd_import_boxscores,
         "season-report": cmd_season_report,
         "ratings": cmd_ratings,
+        "update-ratings": cmd_update_ratings,
         "standings": cmd_standings,
         "matchups": cmd_matchups,
         "today": cmd_matchups,
