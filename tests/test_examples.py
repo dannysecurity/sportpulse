@@ -30,3 +30,9 @@ def test_example_historical_export_csv_parses():
     scores = load_box_scores(EXAMPLES_DIR / "historical_export.csv")
     assert len(scores) == 4
     assert scores[2].winner() == "Lakers"
+
+
+def test_example_historical_export_ndjson_parses():
+    scores = load_box_scores(EXAMPLES_DIR / "historical_export.ndjson")
+    assert len(scores) == 4
+    assert scores[0].played_on is not None

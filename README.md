@@ -30,8 +30,11 @@ sportpulse boxscore --home "Lakers" --away "Celtics" --home-score 112 --away-sco
 # Show ELO trend after a result
 sportpulse elo --team-a "Lakers" --rating-a 1580 --team-b "Celtics" --rating-b 1620 --score-a 112 --score-b 108
 
-# Import historical box scores from JSON or CSV
+# Import historical box scores from JSON, CSV, or NDJSON
 sportpulse import-boxscores --file examples/season.json
+
+# Import with an audit report (teams, date range, duplicate detection)
+sportpulse import-boxscores --file examples/historical_export.ndjson --audit
 
 # Team record and ELO trend from the sample season
 sportpulse season-report --team Lakers --file examples/season.json
@@ -114,13 +117,16 @@ When no config exists, the CLI falls back to `examples/` in the repo root (edita
 ```python
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import EloCalculator
-from sportpulse.parsers import load_box_scores
+from sportpulse.parsers import import_box_scores_with_audit, load_box_scores
 
 game = BoxScore(home="Lakers", away="Celtics", home_score=112, away_score=108)
 print(game.winner())  # "Lakers"
 
 for box in load_box_scores("examples/season.csv"):
     print(box.summary())
+
+scores, audit = import_box_scores_with_audit("examples/historical_export.ndjson")
+print(audit.to_dict())  # format, teams, date range, duplicate games
 
 calc = EloCalculator(k_factor=20)
 updated = calc.update(1580, 1620, home_score=112, away_score=108)

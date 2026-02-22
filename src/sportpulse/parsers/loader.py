@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from sportpulse.boxscore import BoxScore
-from sportpulse.parsers.csv_parser import parse_box_scores_from_csv
-from sportpulse.parsers.json_parser import parse_box_scores_from_json
+from sportpulse.parsers.text_parser import parse_box_scores_text
 
 _box_score_cache: dict[tuple[str, str | None], tuple[int, int, list[BoxScore]]] = {}
 
@@ -15,19 +14,17 @@ def clear_box_score_cache() -> None:
 
 
 def _read_box_scores(file_path: Path, fmt: str | None) -> list[BoxScore]:
-    resolved = (fmt or file_path.suffix.lstrip(".")).lower()
     text = file_path.read_text(encoding="utf-8")
-
-    if resolved in ("json", "js"):
-        return parse_box_scores_from_json(text)
-    if resolved == "csv":
-        return parse_box_scores_from_csv(text)
-
-    raise ValueError(f"unsupported box score format: {resolved!r} (use json or csv)")
+    scores, _ = parse_box_scores_text(
+        text,
+        fmt=fmt,
+        suffix=file_path.suffix.lstrip("."),
+    )
+    return scores
 
 
 def load_box_scores(path: Path | str, fmt: str | None = None) -> list[BoxScore]:
-    """Load historical box scores from a JSON or CSV file.
+    """Load historical box scores from a JSON, CSV, or NDJSON file.
 
     Parsed results are cached in-process keyed by resolved path, format, and
     file modification time so repeated loads skip disk I/O and parsing.
