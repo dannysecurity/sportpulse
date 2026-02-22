@@ -100,21 +100,37 @@ def next_slate_date(matchups: list[Matchup], on_or_after: date) -> date | None:
     return future_dates[0] if future_dates else None
 
 
+def last_slate_date(matchups: list[Matchup]) -> date | None:
+    """Return the latest scheduled date in the slate file."""
+    if not matchups:
+        return None
+    return max(matchup.scheduled_on for matchup in matchups)
+
+
 def resolve_slate_date(
     matchups: list[Matchup],
     on_date: date,
     *,
     advance_if_empty: bool = False,
-) -> tuple[date, bool]:
-    """Pick the slate date, optionally rolling forward when the day is empty."""
+) -> tuple[date, bool, bool]:
+    """Pick the slate date, optionally rolling forward or back when the day is empty.
+
+    Returns ``(slate_date, advanced_to_next_slate, advanced_to_last_slate)``.
+    When ``advance_if_empty`` is set and the requested day has no games, the
+    next future slate is preferred; if every game is in the past, the most
+    recent slate is shown instead.
+    """
     if matchups_for_date(matchups, on_date):
-        return on_date, False
+        return on_date, False, False
     if not advance_if_empty:
-        return on_date, False
+        return on_date, False, False
     next_date = next_slate_date(matchups, on_date)
-    if next_date is None:
-        return on_date, False
-    return next_date, True
+    if next_date is not None:
+        return next_date, True, False
+    last_date = last_slate_date(matchups)
+    if last_date is not None:
+        return last_date, False, True
+    return on_date, False, False
 
 
 def matchups_involving_team(
@@ -313,6 +329,10 @@ def format_matchups_table(report: dict[str, object]) -> str:
         requested = report.get("requested_date")
         if isinstance(requested, str):
             title = f"{title}  (requested {requested}, next slate)"
+    elif report.get("advanced_to_last_slate"):
+        requested = report.get("requested_date")
+        if isinstance(requested, str):
+            title = f"{title}  (requested {requested}, last slate)"
     team_filter = report.get("team_filter")
     if isinstance(team_filter, str):
         title = f"{title}  [{team_filter}]"
@@ -390,7 +410,7 @@ def build_matchups_report(
 ) -> dict[str, object]:
     """Filter a slate to one day and attach odds-lite projections."""
     requested_date = on_date
-    slate_date, advanced = resolve_slate_date(
+    slate_date, advanced_next, advanced_last = resolve_slate_date(
         matchups,
         on_date,
         advance_if_empty=advance_if_empty,
@@ -414,7 +434,8 @@ def build_matchups_report(
     report: dict[str, object] = {
         "date": slate_date.isoformat(),
         "requested_date": requested_date.isoformat(),
-        "advanced_to_next_slate": advanced,
+        "advanced_to_next_slate": advanced_next,
+        "advanced_to_last_slate": advanced_last,
         "matchups": projected,
         "summary": build_slate_summary(projected),
     }

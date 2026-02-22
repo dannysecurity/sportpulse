@@ -8,6 +8,7 @@ from sportpulse.matchups import (
     build_slate_summary,
     clear_matchups_cache,
     format_matchups_table,
+    last_slate_date,
     load_matchups,
     matchups_for_date,
     matchups_involving_team,
@@ -252,14 +253,28 @@ def test_next_slate_date_skips_empty_days():
     assert next_slate_date(matchups, date(2026, 1, 18)) is None
 
 
+def test_last_slate_date_returns_latest():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+
+    assert last_slate_date(matchups) == date(2026, 1, 17)
+
+
 def test_resolve_slate_date_advances_when_empty():
     matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
 
     unchanged = resolve_slate_date(matchups, date(2026, 1, 16))
-    assert unchanged == (date(2026, 1, 16), False)
+    assert unchanged == (date(2026, 1, 16), False, False)
 
     advanced = resolve_slate_date(matchups, date(2026, 1, 15), advance_if_empty=True)
-    assert advanced == (date(2026, 1, 16), True)
+    assert advanced == (date(2026, 1, 16), True, False)
+
+
+def test_resolve_slate_date_falls_back_to_last_slate():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+
+    resolved = resolve_slate_date(matchups, date(2026, 2, 1), advance_if_empty=True)
+
+    assert resolved == (date(2026, 1, 17), False, True)
 
 
 def test_build_matchups_report_advances_with_next_flag():
@@ -273,7 +288,24 @@ def test_build_matchups_report_advances_with_next_flag():
     assert report["requested_date"] == "2026-01-15"
     assert report["date"] == "2026-01-16"
     assert report["advanced_to_next_slate"] is True
+    assert report["advanced_to_last_slate"] is False
     assert len(report["matchups"]) == 2
+
+
+def test_build_matchups_report_falls_back_to_last_slate():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 2, 1),
+        advance_if_empty=True,
+    )
+
+    assert report["requested_date"] == "2026-02-01"
+    assert report["date"] == "2026-01-17"
+    assert report["advanced_to_next_slate"] is False
+    assert report["advanced_to_last_slate"] is True
+    assert len(report["matchups"]) == 1
+    assert report["matchups"][0]["home"] == "Lakers"
 
 
 def test_matchups_involving_team_filters_slate():
@@ -309,6 +341,39 @@ def test_format_matchups_table_shows_next_slate_banner():
 
     assert "requested 2026-01-15, next slate" in table
     assert "Knicks @ Celtics" in table
+
+
+def test_format_matchups_table_shows_last_slate_banner():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 2, 1),
+        advance_if_empty=True,
+    )
+
+    table = format_matchups_table(report)
+
+    assert "requested 2026-02-01, last slate" in table
+    assert "Nuggets @ Lakers" in table
+
+
+def test_cli_today_falls_back_to_last_slate_when_past_all_games(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-07-08",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "requested 2026-07-08, last slate" in output
+    assert "Nuggets @ Lakers" in output
 
 
 def test_format_matchups_table_empty_slate_message():
