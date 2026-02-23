@@ -71,6 +71,13 @@ sportpulse today --date 2026-01-16
 sportpulse matchups --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --format table
 
+# Compact one-liner per game or CSV export for today's odds-lite slate
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --format compact
+
+sportpulse matchups --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --format csv
+
 # Quick look at today's slate (table output; auto-rolls to the next day when empty)
 sportpulse today --file examples/matchups.json --history examples/season.json \
   --date 2026-01-15

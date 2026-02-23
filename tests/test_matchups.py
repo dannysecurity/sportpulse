@@ -7,6 +7,9 @@ from sportpulse.matchups import (
     build_matchups_report,
     build_slate_summary,
     clear_matchups_cache,
+    format_matchups_compact,
+    format_matchups_csv,
+    format_matchups_report,
     format_matchups_table,
     last_slate_date,
     load_matchups,
@@ -225,6 +228,58 @@ def test_format_matchups_table(capsys):
     assert "SPREAD" in table
     assert "ML(H)" in table
     assert "O/U" in table
+    assert "19:30" in table
+    assert "TIME" in table
+
+
+def test_format_matchups_compact_one_line_per_game():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+    )
+
+    compact = format_matchups_compact(report)
+
+    assert "1. Knicks @ Celtics" in compact
+    assert "2. Heat @ Warriors" in compact
+    assert "|" in compact
+    assert "O/U" in compact
+    assert "Slate:" in compact
+
+
+def test_format_matchups_csv_headers_and_rows():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+    )
+
+    csv_output = format_matchups_csv(report)
+    lines = csv_output.splitlines()
+
+    assert lines[0].startswith("date,start_time,away,home,pick,")
+    assert len(lines) == 1 + len(report["matchups"])
+    assert "Knicks" in csv_output
+    assert "Celtics" in csv_output
+
+
+def test_format_matchups_report_dispatches_formats():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+    )
+
+    assert "SPREAD" in format_matchups_report(report, "table")
+    assert "|" in format_matchups_report(report, "compact")
+    assert format_matchups_report(report, "csv").startswith("date,")
 
 
 def test_build_matchups_report_for_date():
@@ -478,3 +533,46 @@ def test_cli_matchups_json(capsys):
     assert '"date": "2026-01-16"' in output
     assert '"home_win_prob"' in output
     assert '"home_moneyline"' in output
+
+
+def test_cli_today_compact(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--format",
+            "compact",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Knicks @ Celtics" in output
+    assert "|" in output
+    assert "SPREAD" not in output
+
+
+def test_cli_matchups_csv(capsys):
+    exit_code = main(
+        [
+            "matchups",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--format",
+            "csv",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert output.startswith("date,start_time,away,home,pick,")
+    assert "Knicks" in output

@@ -14,7 +14,7 @@ from sportpulse.board import (
 from sportpulse.boxscore import BoxScore
 from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
-from sportpulse.matchups import format_matchups_table
+from sportpulse.matchups import FORMAT_OPTIONS as MATCHUPS_FORMAT_OPTIONS, format_matchups_report
 from sportpulse.parsers import (
     box_scores_to_json,
     import_box_scores_with_audit,
@@ -87,9 +87,9 @@ def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--format",
-        choices=("json", "table"),
+        choices=MATCHUPS_FORMAT_OPTIONS,
         default="json",
-        help="Output format (json or human-readable table)",
+        help="Output format (json, table, compact, or csv)",
     )
 
 
@@ -393,10 +393,10 @@ def cmd_matchups(args: argparse.Namespace) -> int:
     report, error_code = _load_matchups_report_from_args(args)
     if error_code is not None:
         return error_code
-    if args.format == "table":
-        print(format_matchups_table(report))
-    else:
+    if args.format == "json":
         print(json.dumps(report, indent=2))
+    else:
+        print(format_matchups_report(report, args.format))
 
     summary = report.get("summary")
     if isinstance(summary, dict) and summary.get("games", 0) == 0:

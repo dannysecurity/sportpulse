@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.elo import expected_score
@@ -15,6 +18,9 @@ from sportpulse.projections import (
 )
 
 _matchups_cache: dict[str, tuple[int, int, list[Matchup]]] = {}
+
+MatchupsFormat = Literal["json", "table", "compact", "csv"]
+FORMAT_OPTIONS: tuple[MatchupsFormat, ...] = ("json", "table", "compact", "csv")
 
 
 @dataclass(frozen=True)
@@ -326,13 +332,10 @@ def _format_slate_summary(summary: dict[str, object]) -> str:
     return "Slate: " + ", ".join(parts)
 
 
-def format_matchups_table(report: dict[str, object]) -> str:
-    """Render a matchups report as a fixed-width terminal table."""
+def _matchups_title(report: dict[str, object]) -> str:
     matchups = report.get("matchups", [])
-    if not isinstance(matchups, list):
-        raise ValueError("report matchups must be a list")
-
-    title = f"{report['date']} — {len(matchups)} game(s)"
+    count = len(matchups) if isinstance(matchups, list) else 0
+    title = f"{report['date']} — {count} game(s)"
     if report.get("advanced_to_next_slate"):
         requested = report.get("requested_date")
         if isinstance(requested, str):
@@ -344,13 +347,40 @@ def format_matchups_table(report: dict[str, object]) -> str:
     team_filter = report.get("team_filter")
     if isinstance(team_filter, str):
         title = f"{title}  [{team_filter}]"
+    return title
 
-    lines = [title, ""]
+
+def _matchup_pick_label(game: dict[str, object]) -> str:
+    """Render a short pick line such as ``Celtics -4.5``."""
+    spread = game.get("home_spread")
+    home = game.get("home")
+    away = game.get("away")
+    if not isinstance(home, str) or not isinstance(away, str):
+        return "pick'em"
+    if not isinstance(spread, (int, float)):
+        return "pick'em"
+    if spread == 0:
+        return "pick'em"
+    favorite = home if spread < 0 else away
+    line = abs(float(spread))
+    return f"{favorite} -{line:.1f}"
+
+
+def format_matchups_table(report: dict[str, object]) -> str:
+    """Render a matchups report as a fixed-width terminal table."""
+    matchups = report.get("matchups", [])
+    if not isinstance(matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    lines = [_matchups_title(report), ""]
     if not matchups:
         lines.append("No games scheduled for this slate.")
         return "\n".join(lines)
     show_totals = any(
         isinstance(game, dict) and "projected_total" in game for game in matchups
+    )
+    show_time = any(
+        isinstance(game, dict) and game.get("start_time") for game in matchups
     )
     if show_totals:
         header = (
@@ -362,6 +392,8 @@ def format_matchups_table(report: dict[str, object]) -> str:
             f"{'MATCHUP':<24} {'SPREAD':>7} {'HOME%':>6} {'AWAY%':>6} "
             f"{'ML(H)':>7} {'ML(A)':>7}"
         )
+    if show_time:
+        header = f"{'TIME':>5} {header}"
     lines.extend([header, "-" * len(header)])
 
     for game in matchups:
@@ -389,6 +421,9 @@ def format_matchups_table(report: dict[str, object]) -> str:
             )
             total_text = f"{total:.1f}" if isinstance(total, (int, float)) else str(total)
             row = f"{row} {proj_text:>5} {total_text:>6}"
+        if show_time:
+            start = str(game.get("start_time") or "--:--")
+            row = f"{start:>5} {row}"
         lines.append(row)
 
     summary = report.get("summary")
@@ -396,6 +431,99 @@ def format_matchups_table(report: dict[str, object]) -> str:
         lines.extend(["", _format_slate_summary(summary)])
 
     return "\n".join(lines)
+
+
+def format_matchups_compact(report: dict[str, object]) -> str:
+    """Render one odds-lite line per game for quick terminal scanning."""
+    matchups = report.get("matchups", [])
+    if not isinstance(matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    lines = [_matchups_title(report)]
+    if not matchups:
+        lines.append("No games scheduled for this slate.")
+        return "\n".join(lines)
+
+    for index, game in enumerate(matchups, start=1):
+        if not isinstance(game, dict):
+            continue
+        label = f"{game['away']} @ {game['home']}"
+        pick = _matchup_pick_label(game)
+        home_ml = _format_moneyline(game.get("home_moneyline"))
+        away_ml = _format_moneyline(game.get("away_moneyline"))
+        line = f"{index}. {label} | {pick} | ML {home_ml}/{away_ml}"
+        total = game.get("projected_total")
+        if isinstance(total, (int, float)):
+            line = f"{line} | O/U {total:.1f}"
+        start = game.get("start_time")
+        if isinstance(start, str) and start:
+            line = f"{start} {line}"
+        lines.append(line)
+
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games"):
+        lines.append(_format_slate_summary(summary))
+    return "\n".join(lines)
+
+
+def format_matchups_csv(report: dict[str, object]) -> str:
+    """Render a matchups report as CSV for spreadsheets."""
+    matchups = report.get("matchups", [])
+    if not isinstance(matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "date",
+            "start_time",
+            "away",
+            "home",
+            "pick",
+            "home_spread",
+            "home_win_prob",
+            "away_win_prob",
+            "home_moneyline",
+            "away_moneyline",
+            "home_projected_points",
+            "away_projected_points",
+            "projected_total",
+        ]
+    )
+    slate_date = report.get("date", "")
+    for game in matchups:
+        if not isinstance(game, dict):
+            continue
+        writer.writerow(
+            [
+                slate_date,
+                game.get("start_time", ""),
+                game.get("away", ""),
+                game.get("home", ""),
+                _matchup_pick_label(game),
+                game.get("home_spread", ""),
+                game.get("home_win_prob", ""),
+                game.get("away_win_prob", ""),
+                game.get("home_moneyline", ""),
+                game.get("away_moneyline", ""),
+                game.get("home_projected_points", ""),
+                game.get("away_projected_points", ""),
+                game.get("projected_total", ""),
+            ]
+        )
+    return buffer.getvalue().rstrip("\n")
+
+
+def format_matchups_report(report: dict[str, object], fmt: MatchupsFormat) -> str:
+    """Dispatch matchups formatting to the requested output type."""
+    if fmt == "table":
+        return format_matchups_table(report)
+    if fmt == "compact":
+        return format_matchups_compact(report)
+    if fmt == "csv":
+        return format_matchups_csv(report)
+    raise ValueError(f"unsupported matchups format: {fmt}")
 
 
 def _format_moneyline(value: object) -> str:
