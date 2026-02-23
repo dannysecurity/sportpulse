@@ -94,6 +94,12 @@ def test_parse_json_game_list():
     assert scores[1].winner() == "D"
 
 
+def test_parse_json_reports_validation_errors_with_index():
+    text = '{"games":[{"homeTeam":"A","awayTeam":"B","homeScore":100}]}'
+    with pytest.raises(ValueError, match="JSON game at index 0: box score missing required field"):
+        parse_box_scores_from_json(text)
+
+
 def test_parse_json_schedule_wrapper():
     text = """{
         "team": "Lakers",

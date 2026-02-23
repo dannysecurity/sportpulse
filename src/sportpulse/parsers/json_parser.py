@@ -29,6 +29,12 @@ def parse_box_scores_from_json(text: str) -> list[BoxScore]:
     scores: list[BoxScore] = []
     for index, record in enumerate(records):
         if not isinstance(record, dict):
-            raise ValueError(f"game at index {index} must be an object")
-        scores.append(parse_box_score(record))
+            raise ValueError(f"JSON game at index {index}: must be an object")
+        try:
+            scores.append(parse_box_score(record))
+        except ValueError as exc:
+            message = str(exc)
+            if message.startswith("JSON game at index"):
+                raise
+            raise ValueError(f"JSON game at index {index}: {message}") from exc
     return scores
