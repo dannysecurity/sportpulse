@@ -24,6 +24,7 @@ class Matchup:
     home: str
     away: str
     scheduled_on: date
+    start_time: str | None = None
 
 
 def clear_matchups_cache() -> None:
@@ -60,7 +61,13 @@ def _parse_matchups_payload(payload: object) -> list[Matchup]:
         except ValueError as exc:
             raise ValueError(f"matchup at index {index}: invalid scheduled_on: {scheduled_on!r}") from exc
 
-        matchups.append(Matchup(home=home, away=away, scheduled_on=on_date))
+        start_time = record.get("start_time")
+        if start_time is not None and not isinstance(start_time, str):
+            raise ValueError(f"matchup at index {index}: start_time must be a string when present")
+
+        matchups.append(
+            Matchup(home=home, away=away, scheduled_on=on_date, start_time=start_time)
+        )
     return matchups
 
 
@@ -197,6 +204,7 @@ def project_matchup(
         "home": matchup.home,
         "away": matchup.away,
         "scheduled_on": matchup.scheduled_on.isoformat(),
+        "start_time": matchup.start_time,
         "home_rating": round(home_rating, 1),
         "away_rating": round(away_rating, 1),
         "home_win_prob": round(home_prob, 3),

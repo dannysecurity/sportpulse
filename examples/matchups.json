@@ -3,17 +3,20 @@
     {
       "home": "Celtics",
       "away": "Knicks",
-      "scheduled_on": "2026-01-16"
+      "scheduled_on": "2026-01-16",
+      "start_time": "19:30"
     },
     {
       "home": "Warriors",
       "away": "Heat",
-      "scheduled_on": "2026-01-16"
+      "scheduled_on": "2026-01-16",
+      "start_time": "22:00"
     },
     {
       "home": "Lakers",
       "away": "Nuggets",
-      "scheduled_on": "2026-01-17"
+      "scheduled_on": "2026-01-17",
+      "start_time": "20:00"
     }
   ]
 }

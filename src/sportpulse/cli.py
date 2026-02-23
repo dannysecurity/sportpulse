@@ -5,6 +5,12 @@ import json
 import sys
 from datetime import date
 
+from sportpulse.board import (
+    FORMAT_OPTIONS as BOARD_FORMAT_OPTIONS,
+    SORT_OPTIONS as BOARD_SORT_OPTIONS,
+    build_board_report,
+    format_board_report,
+)
 from sportpulse.boxscore import BoxScore
 from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
@@ -81,6 +87,34 @@ def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
         default="json",
         help="Output format (json or human-readable table)",
     )
+
+
+def _add_board_options(parser: argparse.ArgumentParser) -> None:
+    _add_matchups_options(parser)
+    parser.set_defaults(format="table")
+    parser.add_argument(
+        "--sort",
+        choices=BOARD_SORT_OPTIONS,
+        default="spread",
+        help="Sort order for the game-day board (default: spread magnitude)",
+    )
+    parser.add_argument(
+        "--min-spread",
+        type=float,
+        default=None,
+        help="Only show games with at least this spread magnitude",
+    )
+    parser.add_argument(
+        "--confidence",
+        choices=("toss_up", "lean", "strong"),
+        default=None,
+        help="Only show games in this confidence tier",
+    )
+    for action in parser._actions:
+        if action.dest == "format":
+            action.choices = BOARD_FORMAT_OPTIONS
+            action.help = "Output format (table, compact, csv, or json)"
+            break
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -248,6 +282,13 @@ def build_parser() -> argparse.ArgumentParser:
     _add_matchups_options(today)
     today.set_defaults(format="table", next=True)
 
+    board = sub.add_parser(
+        "board",
+        help="Game-day odds-lite board with confidence tiers and sortable output",
+    )
+    _add_board_options(board)
+    board.set_defaults(next=True)
+
     return parser
 
 
@@ -299,7 +340,8 @@ def cmd_import_boxscores(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_matchups(args: argparse.Namespace) -> int:
+def _load_matchups_report_from_args(args: argparse.Namespace) -> tuple[dict[str, object], int | None]:
+    """Resolve config and build a matchups report; return (report, error_code)."""
     on_date = date.fromisoformat(args.date) if args.date else date.today()
     try:
         paths = resolve_matchups_paths(
@@ -309,7 +351,7 @@ def cmd_matchups(args: argparse.Namespace) -> int:
         )
     except FileNotFoundError as exc:
         print(f"matchups: {exc}", file=sys.stderr)
-        return 2
+        return {}, 2
 
     if paths.history_file is None:
         print(
@@ -340,6 +382,13 @@ def cmd_matchups(args: argparse.Namespace) -> int:
         advance_if_empty=args.next if args.next is not None else False,
         team=args.team,
     )
+    return report, None
+
+
+def cmd_matchups(args: argparse.Namespace) -> int:
+    report, error_code = _load_matchups_report_from_args(args)
+    if error_code is not None:
+        return error_code
     if args.format == "table":
         print(format_matchups_table(report))
     else:
@@ -347,6 +396,29 @@ def cmd_matchups(args: argparse.Namespace) -> int:
 
     summary = report.get("summary")
     if isinstance(summary, dict) and summary.get("games", 0) == 0:
+        return 1
+    return 0
+
+
+def cmd_board(args: argparse.Namespace) -> int:
+    report, error_code = _load_matchups_report_from_args(args)
+    if error_code is not None:
+        return error_code
+
+    board_report = build_board_report(
+        report,
+        sort_by=args.sort,
+        min_spread=args.min_spread,
+        confidence=args.confidence,
+    )
+    if args.format == "json":
+        print(json.dumps(board_report, indent=2))
+    else:
+        print(format_board_report(board_report, args.format))
+
+    board = board_report.get("board")
+    games_shown = board.get("games_shown") if isinstance(board, dict) else None
+    if games_shown == 0:
         return 1
     return 0
 
@@ -451,6 +523,7 @@ def main(argv: list[str] | None = None) -> int:
         "standings": cmd_standings,
         "matchups": cmd_matchups,
         "today": cmd_matchups,
+        "board": cmd_board,
     }
     return handlers[args.command](args)
 

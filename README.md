@@ -10,6 +10,7 @@ Sports stats toolkit for working with box scores, team schedules, and ELO rating
 - **Ratings leaderboard** — replay a season file and rank every team by current ELO
 - **League standings** — rank every team by win/loss record and point differential
 - **Matchups** — project today's slate with odds-lite win probabilities, spreads, moneylines, and scoring totals
+- **Game-day board** — sortable odds-lite dashboard with confidence tiers, compact/CSV output, and slate highlights
 - **CLI** — inspect data from the terminal
 - **JSON API** — serve stats over HTTP for integrations
 
@@ -81,6 +82,24 @@ sportpulse today --file examples/matchups.json --history examples/season.json \
 # Filter to one team's upcoming matchup
 sportpulse today --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --team Lakers
+
+# Game-day board with confidence tiers (sorted by spread magnitude)
+sportpulse board --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16
+
+# Compact one-liner per game or CSV export for spreadsheets
+sportpulse board --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --format compact
+
+sportpulse board --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --format csv
+
+# Only show strong favorites or games above a spread threshold
+sportpulse board --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --confidence strong
+
+sportpulse board --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --min-spread 4 --sort total
 
 # Start the JSON API on port 8080
 sportpulse serve --port 8080
