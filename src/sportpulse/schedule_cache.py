@@ -11,12 +11,13 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from sportpulse.matchups import build_matchups_report, load_matchups
 from sportpulse.parsers import load_box_scores
 from sportpulse.schedule import load_team_schedule
 from sportpulse.season import build_season_report
+from sportpulse.standings import build_standings_report
 
 MatchupsReportCacheKey = tuple[
     str,
@@ -42,8 +43,18 @@ SeasonReportCacheKey = tuple[
     float,
 ]
 
+StandingsReportCacheKey = tuple[
+    str,
+    tuple[int, int],
+    str | None,
+    str | None,
+    str,
+    str | None,
+]
+
 _matchups_report_cache: dict[MatchupsReportCacheKey, dict[str, object]] = {}
 _season_report_cache: dict[SeasonReportCacheKey, dict[str, object]] = {}
+_standings_report_cache: dict[StandingsReportCacheKey, dict[str, object]] = {}
 
 
 class FileFingerprint(NamedTuple):
@@ -61,9 +72,10 @@ def file_fingerprint(path: Path | str) -> FileFingerprint:
 
 
 def clear_schedule_report_cache() -> None:
-    """Clear cached matchups and season reports."""
+    """Clear cached matchups, season, and standings reports."""
     _matchups_report_cache.clear()
     _season_report_cache.clear()
+    _standings_report_cache.clear()
 
 
 def load_matchups_report(
@@ -168,4 +180,43 @@ def load_season_report(
         k_factor=k_factor,
     )
     _season_report_cache[cache_key] = report
+    return report
+
+
+def load_standings_report(
+    file_path: Path | str,
+    *,
+    fmt: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    tie_breaker: Literal["win_pct", "point_diff", "team_name"] = "win_pct",
+) -> dict[str, object]:
+    """Load a league standings report from a box score file with caching.
+
+    Parsed box scores are cached by their loader; this function additionally
+    caches the assembled standings report keyed by file fingerprint, date range,
+    tie-breaker, and format.
+    """
+    resolved = Path(file_path).resolve()
+    fp = file_fingerprint(resolved)
+    cache_key: StandingsReportCacheKey = (
+        str(resolved),
+        (fp.mtime_ns, fp.size),
+        start.isoformat() if start is not None else None,
+        end.isoformat() if end is not None else None,
+        tie_breaker,
+        fmt,
+    )
+    cached = _standings_report_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    scores = load_box_scores(resolved, fmt=fmt)
+    report = build_standings_report(
+        scores,
+        start=start,
+        end=end,
+        tie_breaker=tie_breaker,
+    )
+    _standings_report_cache[cache_key] = report
     return report

@@ -9,10 +9,9 @@ from urllib.parse import parse_qs, urlparse
 from sportpulse.boxscore import BoxScore
 from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
-from sportpulse.schedule_cache import load_matchups_report
+from sportpulse.schedule_cache import load_matchups_report, load_standings_report
 from sportpulse.parsers import load_box_scores
 from sportpulse.ratings import build_rating_update_report, build_ratings_leaderboard
-from sportpulse.standings import build_standings_report
 
 
 class SportPulseHandler(BaseHTTPRequestHandler):
@@ -187,9 +186,8 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                 tie_breaker = params.get("tie_breaker", ["win_pct"])[0]
                 if tie_breaker not in ("win_pct", "point_diff", "team_name"):
                     raise ValueError("tie_breaker must be win_pct, point_diff, or team_name")
-                scores = load_box_scores(file_param)
-                report = build_standings_report(
-                    scores,
+                report = load_standings_report(
+                    file_param,
                     start=start,
                     end=end,
                     tie_breaker=tie_breaker,  # type: ignore[arg-type]

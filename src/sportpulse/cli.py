@@ -25,8 +25,12 @@ from sportpulse.ratings import (
     build_ratings_leaderboard,
     format_ratings_table,
 )
-from sportpulse.schedule_cache import load_matchups_report, load_season_report
-from sportpulse.standings import build_standings_report, format_standings_table
+from sportpulse.schedule_cache import (
+    load_matchups_report,
+    load_season_report,
+    load_standings_report,
+)
+from sportpulse.standings import format_standings_table
 
 
 def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
@@ -472,9 +476,9 @@ def cmd_standings(args: argparse.Namespace) -> int:
         )
         return 2
 
-    scores = load_box_scores(args.file, fmt=args.format)
-    report = build_standings_report(
-        scores,
+    report = load_standings_report(
+        args.file,
+        fmt=args.format,
         start=start,
         end=end,
         tie_breaker=args.tie_breaker,

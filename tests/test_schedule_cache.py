@@ -6,6 +6,7 @@ from sportpulse.schedule_cache import (
     file_fingerprint,
     load_matchups_report,
     load_season_report,
+    load_standings_report,
 )
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
@@ -103,6 +104,30 @@ def test_load_season_report_reuses_cache_until_file_changes(tmp_path: Path):
     reloaded = load_season_report(path, "Lakers")
     assert reloaded is not first
     assert reloaded["record"] == {"wins": 0, "losses": 1, "ties": 0}
+
+
+def test_load_standings_report_reuses_cache_until_file_changes(tmp_path: Path):
+    clear_schedule_report_cache()
+    path = tmp_path / "season.json"
+    path.write_text(
+        '[{"home":"Lakers","away":"Celtics","home_score":110,"away_score":105,'
+        '"played_on":"2026-01-10"}]',
+        encoding="utf-8",
+    )
+
+    first = load_standings_report(path)
+    second = load_standings_report(path)
+    assert first is second
+
+    path.write_text(
+        '[{"home":"Lakers","away":"Celtics","home_score":99,"away_score":102,'
+        '"played_on":"2026-01-10"}]',
+        encoding="utf-8",
+    )
+    reloaded = load_standings_report(path)
+    assert reloaded is not first
+    lakers = next(row for row in reloaded["standings"] if row["team"] == "Lakers")
+    assert lakers["record"]["wins"] == 0
 
 
 def test_load_season_report_matches_build_season_report(tmp_path: Path):
