@@ -106,6 +106,9 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                 )
                 advance_if_empty = params.get("next", ["0"])[0].lower() in ("1", "true", "yes")
                 team = params.get("team", [None])[0]
+                days = int(params.get("days", ["1"])[0])
+                if days < 1:
+                    raise ValueError("days must be at least 1")
                 report = load_matchups_report(
                     paths.matchups_file,
                     on_date=on_date,
@@ -116,6 +119,7 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     home_court_points=home_court_points,
                     advance_if_empty=advance_if_empty,
                     team=team,
+                    days=days,
                 )
             except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
                 self._send_json(400, {"error": str(exc)})

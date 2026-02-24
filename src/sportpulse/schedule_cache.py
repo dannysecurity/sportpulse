@@ -31,6 +31,7 @@ MatchupsReportCacheKey = tuple[
     float,
     bool,
     str | None,
+    int,
 ]
 
 SeasonReportCacheKey = tuple[
@@ -90,6 +91,7 @@ def load_matchups_report(
     home_court_points: float = 2.5,
     advance_if_empty: bool = False,
     team: str | None = None,
+    days: int = 1,
 ) -> dict[str, object]:
     """Load a matchups slate and build an odds-lite report with caching.
 
@@ -115,6 +117,7 @@ def load_matchups_report(
         home_court_points,
         advance_if_empty,
         team,
+        days,
     )
     cached = _matchups_report_cache.get(cache_key)
     if cached is not None:
@@ -136,6 +139,7 @@ def load_matchups_report(
         home_court_points=home_court_points,
         advance_if_empty=advance_if_empty,
         team=team,
+        days=days,
     )
     _matchups_report_cache[cache_key] = report
     return report

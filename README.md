@@ -93,6 +93,10 @@ sportpulse today --file examples/matchups.json --history examples/season.json \
 sportpulse today --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --team Lakers
 
+# Multi-day odds-lite window (consecutive calendar days from the start date)
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --days 2
+
 # Game-day board with confidence tiers (sorted by spread magnitude)
 sportpulse board --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16

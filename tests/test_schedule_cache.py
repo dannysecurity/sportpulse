@@ -83,6 +83,29 @@ def test_load_matchups_report_cache_is_parameterized_by_date():
     assert day_two["date"] == "2026-01-17"
 
 
+def test_load_matchups_report_cache_is_parameterized_by_days():
+    clear_schedule_report_cache()
+    matchups = EXAMPLES_DIR / "matchups.json"
+    history = EXAMPLES_DIR / "season.json"
+
+    one_day = load_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history_file=history,
+        days=1,
+    )
+    two_day = load_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history_file=history,
+        days=2,
+    )
+
+    assert one_day is not two_day
+    assert "matchups" in one_day
+    assert "slates" in two_day
+
+
 def test_load_season_report_reuses_cache_until_file_changes(tmp_path: Path):
     clear_schedule_report_cache()
     path = tmp_path / "season.json"

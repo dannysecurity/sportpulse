@@ -4,7 +4,7 @@ import csv
 import io
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -103,6 +103,22 @@ def load_matchups(path: Path | str) -> list[Matchup]:
 def matchups_for_date(matchups: list[Matchup], on_date: date) -> list[Matchup]:
     """Return matchups scheduled on a specific calendar day."""
     return [matchup for matchup in matchups if matchup.scheduled_on == on_date]
+
+
+def matchups_in_range(
+    matchups: list[Matchup],
+    start: date,
+    *,
+    days: int = 1,
+) -> list[tuple[date, list[Matchup]]]:
+    """Group matchups by date for ``days`` consecutive calendar days from ``start``."""
+    if days < 1:
+        raise ValueError("days must be at least 1")
+    grouped: list[tuple[date, list[Matchup]]] = []
+    for offset in range(days):
+        on_date = start + timedelta(days=offset)
+        grouped.append((on_date, matchups_for_date(matchups, on_date)))
+    return grouped
 
 
 def next_slate_date(matchups: list[Matchup], on_or_after: date) -> date | None:
@@ -308,6 +324,24 @@ def build_slate_summary(matchups: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def build_range_summary(slates: list[dict[str, object]]) -> dict[str, object]:
+    """Summarize odds-lite projections across multiple daily slates."""
+    all_games: list[dict[str, object]] = []
+    days_with_games = 0
+    for slate in slates:
+        matchups = slate.get("matchups")
+        if not isinstance(matchups, list):
+            continue
+        if matchups:
+            days_with_games += 1
+        all_games.extend(game for game in matchups if isinstance(game, dict))
+
+    summary = build_slate_summary(all_games)
+    summary["days"] = len(slates)
+    summary["days_with_games"] = days_with_games
+    return summary
+
+
 def _format_slate_summary(summary: dict[str, object]) -> str:
     """Render a one-line odds-lite slate digest for terminal output."""
     games = summary.get("games", 0)
@@ -333,6 +367,9 @@ def _format_slate_summary(summary: dict[str, object]) -> str:
 
 
 def _matchups_title(report: dict[str, object]) -> str:
+    if "slates" in report:
+        return _multi_day_title(report)
+
     matchups = report.get("matchups", [])
     count = len(matchups) if isinstance(matchups, list) else 0
     title = f"{report['date']} — {count} game(s)"
@@ -348,6 +385,45 @@ def _matchups_title(report: dict[str, object]) -> str:
     if isinstance(team_filter, str):
         title = f"{title}  [{team_filter}]"
     return title
+
+
+def _multi_day_title(report: dict[str, object]) -> str:
+    summary = report.get("summary")
+    games = summary.get("games", 0) if isinstance(summary, dict) else 0
+    start = report.get("start_date", "")
+    end = report.get("end_date", "")
+    days = report.get("days", 1)
+    title = f"{start} — {end} ({days} days) — {games} game(s)"
+    if report.get("advanced_to_next_slate"):
+        requested = report.get("requested_date")
+        if isinstance(requested, str):
+            title = f"{title}  (requested {requested}, next slate)"
+    elif report.get("advanced_to_last_slate"):
+        requested = report.get("requested_date")
+        if isinstance(requested, str):
+            title = f"{title}  (requested {requested}, last slate)"
+    team_filter = report.get("team_filter")
+    if isinstance(team_filter, str):
+        title = f"{title}  [{team_filter}]"
+    return title
+
+
+def _format_range_summary(summary: dict[str, object]) -> str:
+    """Render a one-line digest for a multi-day odds-lite window."""
+    games = summary.get("games", 0)
+    if not isinstance(games, int) or games == 0:
+        return ""
+
+    days = summary.get("days", 0)
+    days_with_games = summary.get("days_with_games", 0)
+    parts = [f"{days_with_games}/{days} days with games"]
+    parts.append(f"{summary['home_favorites']} home fav")
+    parts.append(f"{summary['away_favorites']} away fav")
+    if summary.get("pick_em_games"):
+        parts.append(f"{summary['pick_em_games']} pick'em")
+    if summary.get("has_scoring_projections") and summary.get("avg_projected_total") is not None:
+        parts.append(f"avg O/U {summary['avg_projected_total']}")
+    return "Window: " + ", ".join(parts)
 
 
 def _matchup_pick_label(game: dict[str, object]) -> str:
@@ -366,8 +442,8 @@ def _matchup_pick_label(game: dict[str, object]) -> str:
     return f"{favorite} -{line:.1f}"
 
 
-def format_matchups_table(report: dict[str, object]) -> str:
-    """Render a matchups report as a fixed-width terminal table."""
+def _format_single_day_table(report: dict[str, object]) -> str:
+    """Render one day's matchups as a fixed-width terminal table."""
     matchups = report.get("matchups", [])
     if not isinstance(matchups, list):
         raise ValueError("report matchups must be a list")
@@ -433,7 +509,45 @@ def format_matchups_table(report: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_matchups_compact(report: dict[str, object]) -> str:
+def format_matchups_table(report: dict[str, object]) -> str:
+    """Render a matchups report as a fixed-width terminal table."""
+    if "slates" in report:
+        return _format_multi_day_table(report)
+    return _format_single_day_table(report)
+
+
+def _format_multi_day_table(report: dict[str, object]) -> str:
+    """Render a multi-day matchups report with one table section per slate."""
+    slates = report.get("slates")
+    if not isinstance(slates, list):
+        raise ValueError("report slates must be a list")
+
+    lines = [_matchups_title(report), ""]
+    if not slates:
+        lines.append("No games scheduled for this window.")
+        return "\n".join(lines)
+
+    for index, slate in enumerate(slates):
+        if not isinstance(slate, dict):
+            continue
+        day_report = {
+            "date": slate.get("date", ""),
+            "matchups": slate.get("matchups", []),
+            "summary": slate.get("summary", {}),
+        }
+        if index > 0:
+            lines.append("")
+        section = _format_single_day_table(day_report)
+        lines.append(section)
+
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games"):
+        lines.extend(["", _format_range_summary(summary)])
+
+    return "\n".join(lines)
+
+
+def _format_single_day_compact(report: dict[str, object]) -> str:
     """Render one odds-lite line per game for quick terminal scanning."""
     matchups = report.get("matchups", [])
     if not isinstance(matchups, list):
@@ -466,32 +580,61 @@ def format_matchups_compact(report: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_matchups_csv(report: dict[str, object]) -> str:
-    """Render a matchups report as CSV for spreadsheets."""
-    matchups = report.get("matchups", [])
-    if not isinstance(matchups, list):
-        raise ValueError("report matchups must be a list")
+def format_matchups_compact(report: dict[str, object]) -> str:
+    """Render one odds-lite line per game for quick terminal scanning."""
+    if "slates" in report:
+        return _format_multi_day_compact(report)
+    return _format_single_day_compact(report)
 
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(
-        [
-            "date",
-            "start_time",
-            "away",
-            "home",
-            "pick",
-            "home_spread",
-            "home_win_prob",
-            "away_win_prob",
-            "home_moneyline",
-            "away_moneyline",
-            "home_projected_points",
-            "away_projected_points",
-            "projected_total",
-        ]
-    )
-    slate_date = report.get("date", "")
+
+def _format_multi_day_compact(report: dict[str, object]) -> str:
+    """Render a multi-day matchups report as compact one-liners grouped by day."""
+    slates = report.get("slates")
+    if not isinstance(slates, list):
+        raise ValueError("report slates must be a list")
+
+    lines = [_matchups_title(report)]
+    if not slates:
+        lines.append("No games scheduled for this window.")
+        return "\n".join(lines)
+
+    game_number = 1
+    for slate in slates:
+        if not isinstance(slate, dict):
+            continue
+        matchups = slate.get("matchups", [])
+        if not isinstance(matchups, list) or not matchups:
+            continue
+        slate_date = slate.get("date", "")
+        lines.append(f"--- {slate_date} ---")
+        for game in matchups:
+            if not isinstance(game, dict):
+                continue
+            label = f"{game['away']} @ {game['home']}"
+            pick = _matchup_pick_label(game)
+            home_ml = _format_moneyline(game.get("home_moneyline"))
+            away_ml = _format_moneyline(game.get("away_moneyline"))
+            line = f"{game_number}. {label} | {pick} | ML {home_ml}/{away_ml}"
+            total = game.get("projected_total")
+            if isinstance(total, (int, float)):
+                line = f"{line} | O/U {total:.1f}"
+            start = game.get("start_time")
+            if isinstance(start, str) and start:
+                line = f"{start} {line}"
+            lines.append(line)
+            game_number += 1
+
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games"):
+        lines.append(_format_range_summary(summary))
+    return "\n".join(lines)
+
+
+def _write_matchups_csv_rows(
+    writer: csv.writer,
+    slate_date: str,
+    matchups: list[object],
+) -> None:
     for game in matchups:
         if not isinstance(game, dict):
             continue
@@ -512,6 +655,47 @@ def format_matchups_csv(report: dict[str, object]) -> str:
                 game.get("projected_total", ""),
             ]
         )
+
+
+def format_matchups_csv(report: dict[str, object]) -> str:
+    """Render a matchups report as CSV for spreadsheets."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "date",
+            "start_time",
+            "away",
+            "home",
+            "pick",
+            "home_spread",
+            "home_win_prob",
+            "away_win_prob",
+            "home_moneyline",
+            "away_moneyline",
+            "home_projected_points",
+            "away_projected_points",
+            "projected_total",
+        ]
+    )
+
+    if "slates" in report:
+        slates = report.get("slates")
+        if not isinstance(slates, list):
+            raise ValueError("report slates must be a list")
+        for slate in slates:
+            if not isinstance(slate, dict):
+                continue
+            matchups = slate.get("matchups", [])
+            if not isinstance(matchups, list):
+                continue
+            _write_matchups_csv_rows(writer, str(slate.get("date", "")), matchups)
+    else:
+        matchups = report.get("matchups", [])
+        if not isinstance(matchups, list):
+            raise ValueError("report matchups must be a list")
+        _write_matchups_csv_rows(writer, str(report.get("date", "")), matchups)
+
     return buffer.getvalue().rstrip("\n")
 
 
@@ -543,37 +727,81 @@ def build_matchups_report(
     home_court_points: float = 2.5,
     advance_if_empty: bool = False,
     team: str | None = None,
+    days: int = 1,
 ) -> dict[str, object]:
-    """Filter a slate to one day and attach odds-lite projections."""
+    """Filter a slate to one or more days and attach odds-lite projections."""
+    if days < 1:
+        raise ValueError("days must be at least 1")
+
     requested_date = on_date
     slate_date, advanced_next, advanced_last = resolve_slate_date(
         matchups,
         on_date,
         advance_if_empty=advance_if_empty,
     )
-    slate = matchups_for_date(matchups, slate_date)
-    if team is not None:
-        slate = matchups_involving_team(slate, team)
     ratings = ratings_from_history(history or [], k_factor=k_factor)
     scoring_profiles = build_scoring_profiles(history) if history else None
-    projected = [
-        project_matchup(
-            matchup,
-            ratings,
-            home_advantage=home_advantage,
-            points_per_100_elo=points_per_100_elo,
-            home_court_points=home_court_points,
-            scoring_profiles=scoring_profiles,
+
+    if days == 1:
+        slate = matchups_for_date(matchups, slate_date)
+        if team is not None:
+            slate = matchups_involving_team(slate, team)
+        projected = [
+            project_matchup(
+                matchup,
+                ratings,
+                home_advantage=home_advantage,
+                points_per_100_elo=points_per_100_elo,
+                home_court_points=home_court_points,
+                scoring_profiles=scoring_profiles,
+            )
+            for matchup in slate
+        ]
+        report: dict[str, object] = {
+            "date": slate_date.isoformat(),
+            "requested_date": requested_date.isoformat(),
+            "advanced_to_next_slate": advanced_next,
+            "advanced_to_last_slate": advanced_last,
+            "matchups": projected,
+            "summary": build_slate_summary(projected),
+        }
+        if team is not None:
+            report["team_filter"] = team
+        return report
+
+    slates: list[dict[str, object]] = []
+    for day, day_matchups in matchups_in_range(matchups, slate_date, days=days):
+        if team is not None:
+            day_matchups = matchups_involving_team(day_matchups, team)
+        projected = [
+            project_matchup(
+                matchup,
+                ratings,
+                home_advantage=home_advantage,
+                points_per_100_elo=points_per_100_elo,
+                home_court_points=home_court_points,
+                scoring_profiles=scoring_profiles,
+            )
+            for matchup in day_matchups
+        ]
+        slates.append(
+            {
+                "date": day.isoformat(),
+                "matchups": projected,
+                "summary": build_slate_summary(projected),
+            }
         )
-        for matchup in slate
-    ]
-    report: dict[str, object] = {
-        "date": slate_date.isoformat(),
+
+    end_date = slate_date + timedelta(days=days - 1)
+    report = {
         "requested_date": requested_date.isoformat(),
+        "start_date": slate_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "days": days,
         "advanced_to_next_slate": advanced_next,
         "advanced_to_last_slate": advanced_last,
-        "matchups": projected,
-        "summary": build_slate_summary(projected),
+        "slates": slates,
+        "summary": build_range_summary(slates),
     }
     if team is not None:
         report["team_filter"] = team

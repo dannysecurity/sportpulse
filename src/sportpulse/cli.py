@@ -89,6 +89,12 @@ def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
         help="Scoring boost applied to the home team in O/U projections",
     )
     parser.add_argument(
+        "--days",
+        type=int,
+        default=1,
+        help="Number of consecutive calendar days to show (default 1)",
+    )
+    parser.add_argument(
         "--format",
         choices=MATCHUPS_FORMAT_OPTIONS,
         default="json",
@@ -403,6 +409,10 @@ def _load_matchups_report_from_args(args: argparse.Namespace) -> tuple[dict[str,
         if args.home_court_points is not None
         else paths.home_court_points
     )
+    if args.days < 1:
+        print("matchups: --days must be at least 1", file=sys.stderr)
+        return {}, 2
+
     report = load_matchups_report(
         paths.matchups_file,
         on_date=on_date,
@@ -413,6 +423,7 @@ def _load_matchups_report_from_args(args: argparse.Namespace) -> tuple[dict[str,
         home_court_points=home_court_points,
         advance_if_empty=args.next if args.next is not None else False,
         team=args.team,
+        days=args.days,
     )
     return report, None
 

@@ -5,6 +5,7 @@ from sportpulse.boxscore import BoxScore
 from sportpulse.cli import main
 from sportpulse.matchups import (
     build_matchups_report,
+    build_range_summary,
     build_slate_summary,
     clear_matchups_cache,
     format_matchups_compact,
@@ -14,6 +15,7 @@ from sportpulse.matchups import (
     last_slate_date,
     load_matchups,
     matchups_for_date,
+    matchups_in_range,
     matchups_involving_team,
     next_slate_date,
     probability_to_american_odds,
@@ -576,3 +578,143 @@ def test_cli_matchups_csv(capsys):
     output = capsys.readouterr().out
     assert output.startswith("date,start_time,away,home,pick,")
     assert "Knicks" in output
+
+
+def test_matchups_in_range_groups_consecutive_days():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+
+    grouped = matchups_in_range(matchups, date(2026, 1, 16), days=2)
+
+    assert len(grouped) == 2
+    assert grouped[0][0] == date(2026, 1, 16)
+    assert len(grouped[0][1]) == 2
+    assert grouped[1][0] == date(2026, 1, 17)
+    assert len(grouped[1][1]) == 1
+
+
+def test_build_matchups_report_multi_day_window():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+        days=2,
+    )
+
+    assert report["start_date"] == "2026-01-16"
+    assert report["end_date"] == "2026-01-17"
+    assert report["days"] == 2
+    assert len(report["slates"]) == 2
+    assert report["summary"]["games"] == 3
+    assert report["summary"]["days_with_games"] == 2
+    assert all("projected_total" in game for slate in report["slates"] for game in slate["matchups"])
+
+
+def test_build_range_summary_aggregates_slates():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+        days=2,
+    )
+
+    summary = build_range_summary(report["slates"])
+
+    assert summary["games"] == 3
+    assert summary["days"] == 2
+    assert summary["days_with_games"] == 2
+    assert summary["has_scoring_projections"] is True
+
+
+def test_format_matchups_table_multi_day():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+        days=2,
+    )
+
+    table = format_matchups_table(report)
+
+    assert "2026-01-16 — 2026-01-17 (2 days)" in table
+    assert "Knicks @ Celtics" in table
+    assert "Nuggets @ Lakers" in table
+    assert "Window:" in table
+
+
+def test_format_matchups_compact_multi_day():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+        days=2,
+    )
+
+    compact = format_matchups_compact(report)
+
+    assert "--- 2026-01-16 ---" in compact
+    assert "--- 2026-01-17 ---" in compact
+    assert "1. Knicks @ Celtics" in compact
+    assert "3. Nuggets @ Lakers" in compact
+
+
+def test_format_matchups_csv_multi_day():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+        days=2,
+    )
+
+    csv_output = format_matchups_csv(report)
+    lines = csv_output.splitlines()
+
+    assert len(lines) == 1 + report["summary"]["games"]
+    assert "2026-01-16" in csv_output
+    assert "2026-01-17" in csv_output
+
+
+def test_cli_today_multi_day_window(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--days",
+            "2",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "2026-01-16 — 2026-01-17 (2 days)" in output
+    assert "Knicks @ Celtics" in output
+    assert "Nuggets @ Lakers" in output
+
+
+def test_cli_matchups_days_must_be_positive(capsys):
+    exit_code = main(
+        [
+            "matchups",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--days",
+            "0",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "--days must be at least 1" in capsys.readouterr().err

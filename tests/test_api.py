@@ -59,6 +59,24 @@ def test_matchups_endpoint_returns_projections_with_totals():
     assert payload["summary"]["has_scoring_projections"] is True
 
 
+def test_matchups_endpoint_supports_multi_day_window():
+    matchups_file = EXAMPLES_DIR / "matchups.json"
+    history_file = EXAMPLES_DIR / "season.json"
+    path = (
+        f"/matchups?file={matchups_file}&history={history_file}"
+        f"&date=2026-01-16&days=2"
+    )
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["start_date"] == "2026-01-16"
+    assert payload["end_date"] == "2026-01-17"
+    assert payload["days"] == 2
+    assert len(payload["slates"]) == 2
+    assert payload["summary"]["games"] == 3
+
+
 def test_matchups_endpoint_uses_config_defaults():
     status, payload = _dispatch_get("/matchups?date=2026-01-16")
 
