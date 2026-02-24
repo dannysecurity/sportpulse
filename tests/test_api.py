@@ -176,3 +176,34 @@ def test_standings_endpoint_requires_file():
 
     assert status == 400
     assert "error" in payload
+
+
+def test_import_boxscores_endpoint_returns_normalized_games():
+    history_file = EXAMPLES_DIR / "historical_export.json"
+    path = f"/import-boxscores?file={history_file}"
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert len(payload) == 4
+    assert payload[0]["home"] == "Lakers"
+    assert payload[0]["played_on"] == "2026-01-10"
+
+
+def test_import_boxscores_endpoint_audit_mode():
+    history_file = EXAMPLES_DIR / "historical_host_visitor.csv"
+    path = f"/import-boxscores?file={history_file}&audit=1"
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert len(payload["games"]) == 4
+    assert payload["audit"]["format"] == "csv"
+    assert "Heat" in payload["audit"]["teams"]
+
+
+def test_import_boxscores_endpoint_requires_file():
+    status, payload = _dispatch_get("/import-boxscores")
+
+    assert status == 400
+    assert "error" in payload

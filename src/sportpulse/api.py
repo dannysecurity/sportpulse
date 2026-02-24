@@ -10,14 +10,18 @@ from sportpulse.boxscore import BoxScore
 from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
 from sportpulse.schedule_cache import load_matchups_report, load_standings_report
-from sportpulse.parsers import load_box_scores
+from sportpulse.parsers import (
+    box_scores_to_json,
+    import_box_scores_with_audit,
+    load_box_scores,
+)
 from sportpulse.ratings import build_rating_update_report, build_ratings_leaderboard
 
 
 class SportPulseHandler(BaseHTTPRequestHandler):
     """Minimal JSON API for box scores and ELO calculations."""
 
-    def _send_json(self, status: int, payload: dict[str, object]) -> None:
+    def _send_json(self, status: int, payload: object) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -113,6 +117,36 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": str(exc)})
                 return
             self._send_json(200, report)
+            return
+
+        if parsed.path == "/import-boxscores":
+            params = parse_qs(parsed.query)
+            try:
+                file_param = params.get("file", [None])[0]
+                if not file_param:
+                    raise ValueError("file query parameter is required")
+                fmt_param = params.get("format", [None])[0]
+                audit_param = params.get("audit", ["0"])[0].lower() in (
+                    "1",
+                    "true",
+                    "yes",
+                )
+                if audit_param:
+                    scores, audit = import_box_scores_with_audit(
+                        file_param,
+                        fmt=fmt_param,
+                    )
+                    payload: object = {
+                        "games": box_scores_to_json(scores),
+                        "audit": audit.to_dict(),
+                    }
+                else:
+                    scores = load_box_scores(file_param, fmt=fmt_param)
+                    payload = box_scores_to_json(scores)
+            except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, payload)
             return
 
         if parsed.path == "/ratings":

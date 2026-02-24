@@ -37,6 +37,9 @@ sportpulse import-boxscores --file examples/season.json
 # Import with an audit report (teams, date range, duplicate detection)
 sportpulse import-boxscores --file examples/historical_export.ndjson --audit
 
+# Normalize a historical export to canonical CSV for spreadsheets
+sportpulse import-boxscores --file examples/historical_export.csv --output csv
+
 # Team record and ELO trend from the sample season
 sportpulse season-report --team Lakers --file examples/season.json
 
@@ -370,6 +373,8 @@ When the API server is running (`sportpulse serve --port 8080`), the sample seas
 ```bash
 curl "http://127.0.0.1:8080/standings?file=examples/season.json"
 curl "http://127.0.0.1:8080/ratings?file=examples/season.json"
+curl "http://127.0.0.1:8080/import-boxscores?file=examples/historical_export.json"
+curl "http://127.0.0.1:8080/import-boxscores?file=examples/historical_export.csv&audit=1"
 ```
 
 Optional query parameters for `/standings`: `start_date`, `end_date`, and `tie_breaker` (`win_pct`, `point_diff`, or `team_name`).

@@ -16,6 +16,7 @@ from sportpulse.config import resolve_matchups_paths
 from sportpulse.elo import EloCalculator
 from sportpulse.matchups import FORMAT_OPTIONS as MATCHUPS_FORMAT_OPTIONS, format_matchups_report
 from sportpulse.parsers import (
+    box_scores_to_csv,
     box_scores_to_json,
     import_box_scores_with_audit,
     load_box_scores,
@@ -161,6 +162,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--audit",
         action="store_true",
         help="Include an import audit (teams, date range, duplicate games)",
+    )
+    import_scores.add_argument(
+        "--output",
+        choices=("json", "csv"),
+        default="json",
+        help="Output format (json or canonical CSV for spreadsheet export)",
     )
 
     season = sub.add_parser(
@@ -333,12 +340,21 @@ def cmd_serve(args: argparse.Namespace) -> int:
 def cmd_import_boxscores(args: argparse.Namespace) -> int:
     if args.audit:
         scores, audit = import_box_scores_with_audit(args.file, fmt=args.format)
+    else:
+        scores = load_box_scores(args.file, fmt=args.format)
+
+    if args.output == "csv":
+        print(box_scores_to_csv(scores), end="")
+        if args.audit:
+            print(json.dumps(audit.to_dict(), indent=2), file=sys.stderr)
+        return 0
+
+    if args.audit:
         payload = {
             "games": box_scores_to_json(scores),
             "audit": audit.to_dict(),
         }
     else:
-        scores = load_box_scores(args.file, fmt=args.format)
         payload = box_scores_to_json(scores)
     print(json.dumps(payload, indent=2))
     return 0

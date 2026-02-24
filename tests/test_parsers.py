@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from sportpulse.parsers import (
+    box_scores_to_csv,
     box_scores_to_json,
     clear_box_score_cache,
     load_box_scores,
@@ -220,3 +221,28 @@ def test_box_scores_to_json_matches_summary():
     payload = box_scores_to_json(scores)
     assert payload[0]["winner"] is None
     assert payload[0]["margin"] == 0
+
+
+def test_box_scores_to_csv_uses_canonical_headers():
+    scores = parse_box_scores_from_json(
+        """[
+            {"home":"A","away":"B","home_score":100,"away_score":98,"played_on":"2026-01-10"},
+            {"home":"C","away":"D","home_score":90,"away_score":88}
+        ]"""
+    )
+    text = box_scores_to_csv(scores)
+    lines = text.splitlines()
+    assert lines[0] == "home,away,home_score,away_score,played_on"
+    assert lines[1] == "A,B,100,98,2026-01-10"
+    assert lines[2] == "C,D,90,88,"
+
+
+def test_box_scores_to_csv_round_trips_through_parser():
+    original = parse_box_scores_from_csv(
+        """host,visitor,score_home,score_away,event_date
+Lakers,Celtics,112,108,2026-01-10
+"""
+    )
+    exported = box_scores_to_csv(original)
+    round_tripped = parse_box_scores_from_csv(exported)
+    assert round_tripped == original

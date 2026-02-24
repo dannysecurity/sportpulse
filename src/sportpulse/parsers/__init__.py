@@ -19,7 +19,7 @@ from sportpulse.parsers.schema import (
     normalize_box_score_record,
     normalize_csv_headers,
 )
-from sportpulse.parsers.serialization import box_scores_to_json
+from sportpulse.parsers.serialization import box_scores_to_csv, box_scores_to_json
 from sportpulse.parsers.text_parser import parse_box_scores_text
 
 __all__ = [
@@ -28,6 +28,7 @@ __all__ = [
     "DuplicateGame",
     "REQUIRED_FIELDS",
     "audit_box_scores",
+    "box_scores_to_csv",
     "box_scores_to_json",
     "canonical_field_name",
     "clear_box_score_cache",
