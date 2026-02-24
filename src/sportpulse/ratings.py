@@ -123,6 +123,70 @@ def build_rating_update_report(
     return report
 
 
+def _net_rating_changes(
+    before: dict[str, EloRating],
+    after: dict[str, EloRating],
+) -> dict[str, dict[str, object]]:
+    """Summarize rating movement for teams present in either snapshot."""
+    teams = sorted(set(before) | set(after))
+    changes: dict[str, dict[str, object]] = {}
+    for team in teams:
+        rating_before = before.get(
+            team, EloRating(team=team, rating=DEFAULT_STARTING_RATING)
+        ).rating
+        rating_after = after.get(
+            team, EloRating(team=team, rating=DEFAULT_STARTING_RATING)
+        ).rating
+        if rating_before != rating_after:
+            changes[team] = _team_update_entry(rating_before, rating_after)
+    return changes
+
+
+def build_batch_rating_update_report(
+    games: list[BoxScore],
+    *,
+    history: list[BoxScore] | None = None,
+    k_factor: float = 20.0,
+    home_advantage: float = 0.0,
+    include_leaderboard: bool = False,
+) -> dict[str, object]:
+    """Bootstrap from history, apply multiple results in order, and return a batch report."""
+    replay = replay_elo_ratings(
+        history or [],
+        k_factor=k_factor,
+        home_advantage=home_advantage,
+    )
+    baseline = {
+        team: EloRating(
+            team=entry.team,
+            rating=entry.rating,
+            games_played=entry.games_played,
+            history=list(entry.history),
+        )
+        for team, entry in replay.ratings.items()
+    }
+    game_updates: list[dict[str, object]] = []
+    for game in chronological_order(games):
+        updates = apply_game_to_ratings(
+            replay.ratings,
+            game,
+            calculator=replay.calculator,
+        )
+        game_updates.append({"game": game.summary(), "updates": updates})
+
+    report: dict[str, object] = {
+        "k_factor": k_factor,
+        "home_advantage": home_advantage,
+        "games_replayed": replay.games_replayed,
+        "games_applied": len(game_updates),
+        "game_updates": game_updates,
+        "net_changes": _net_rating_changes(baseline, replay.ratings),
+    }
+    if include_leaderboard:
+        report["ratings"] = rank_elo_ratings(replay.ratings)
+    return report
+
+
 def build_ratings_leaderboard(
     scores: list[BoxScore],
     *,
@@ -167,4 +231,72 @@ def format_ratings_table(report: dict[str, object]) -> str:
             f"{row['rank']:>3} {row['team']:<16} {row['rating']:>7.1f} "
             f"{row['games_played']:>4} {delta_text:>7}"
         )
+    return "\n".join(lines)
+
+
+def _format_team_update_rows(updates: dict[str, dict[str, object]]) -> list[str]:
+    header = f"{'TEAM':<16} {'BEFORE':>8} {'AFTER':>8} {'Δ':>8}"
+    lines = [header, "-" * len(header)]
+    for team in sorted(updates):
+        row = updates[team]
+        if not isinstance(row, dict):
+            continue
+        delta = row["delta"]
+        delta_text = f"{delta:+.1f}" if isinstance(delta, (int, float)) else str(delta)
+        lines.append(
+            f"{team:<16} {row['before']:>8.1f} {row['after']:>8.1f} {delta_text:>8}"
+        )
+    return lines
+
+
+def format_rating_update_table(report: dict[str, object]) -> str:
+    """Render a single- or batch-rating update report as a terminal table."""
+    games_replayed = report.get("games_replayed", 0)
+    game_updates = report.get("game_updates")
+    if isinstance(game_updates, list):
+        applied = report.get("games_applied", len(game_updates))
+        lines = [
+            f"ELO batch update — {applied} game(s) applied ({games_replayed} replayed)",
+            "",
+        ]
+        if not game_updates:
+            lines.append("No new games to apply.")
+            return "\n".join(lines)
+
+        for index, entry in enumerate(game_updates, start=1):
+            if not isinstance(entry, dict):
+                continue
+            game = entry.get("game", {})
+            if isinstance(game, dict):
+                summary = (
+                    f"{game.get('home', '?')} {game.get('home_score', '?')}, "
+                    f"{game.get('away', '?')} {game.get('away_score', '?')}"
+                )
+                lines.append(f"Game {index}: {summary}")
+            updates = entry.get("updates", {})
+            if isinstance(updates, dict) and updates:
+                lines.extend(_format_team_update_rows(updates))
+            lines.append("")
+
+        net_changes = report.get("net_changes", {})
+        if isinstance(net_changes, dict) and net_changes:
+            lines.append("Net change:")
+            lines.extend(_format_team_update_rows(net_changes))
+        return "\n".join(lines).rstrip()
+
+    game = report.get("game", {})
+    if isinstance(game, dict):
+        title = (
+            f"ELO update — {game.get('home', '?')} {game.get('home_score', '?')}, "
+            f"{game.get('away', '?')} {game.get('away_score', '?')} "
+            f"({games_replayed} replayed)"
+        )
+    else:
+        title = f"ELO update ({games_replayed} replayed)"
+    lines = [title, ""]
+    updates = report.get("updates", {})
+    if not isinstance(updates, dict) or not updates:
+        lines.append("No rating updates.")
+        return "\n".join(lines)
+    lines.extend(_format_team_update_rows(updates))
     return "\n".join(lines)

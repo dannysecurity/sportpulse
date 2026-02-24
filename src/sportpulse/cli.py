@@ -22,8 +22,10 @@ from sportpulse.parsers import (
     load_box_scores,
 )
 from sportpulse.ratings import (
+    build_batch_rating_update_report,
     build_rating_update_report,
     build_ratings_leaderboard,
+    format_rating_update_table,
     format_ratings_table,
 )
 from sportpulse.schedule_cache import (
@@ -223,10 +225,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--history",
         help="Optional JSON or CSV season file to bootstrap ratings (defaults to 1500)",
     )
-    update_ratings.add_argument("--home", required=True, help="Home team name")
-    update_ratings.add_argument("--away", required=True, help="Away team name")
-    update_ratings.add_argument("--home-score", type=int, required=True)
-    update_ratings.add_argument("--away-score", type=int, required=True)
+    update_ratings.add_argument(
+        "--games-file",
+        help="JSON or CSV file with one or more new results to apply in batch",
+    )
+    update_ratings.add_argument("--home", help="Home team name (single-game mode)")
+    update_ratings.add_argument("--away", help="Away team name (single-game mode)")
+    update_ratings.add_argument("--home-score", type=int, help="Home team score")
+    update_ratings.add_argument("--away-score", type=int, help="Away team score")
     update_ratings.add_argument(
         "--played-on",
         help="Game date (ISO) recorded in rating history",
@@ -247,6 +253,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--leaderboard",
         action="store_true",
         help="Include the full ranked leaderboard after the update",
+    )
+    update_ratings.add_argument(
+        "--output",
+        choices=("json", "table"),
+        default="json",
+        help="Output format (json or human-readable table)",
     )
 
     league = sub.add_parser(
@@ -449,22 +461,52 @@ def cmd_update_ratings(args: argparse.Namespace) -> int:
         if args.history
         else []
     )
-    played_on = date.fromisoformat(args.played_on) if args.played_on else None
-    game = BoxScore(
-        home=args.home,
-        away=args.away,
-        home_score=args.home_score,
-        away_score=args.away_score,
-        played_on=played_on,
-    )
-    report = build_rating_update_report(
-        game,
-        history=history,
-        k_factor=args.k_factor,
-        home_advantage=args.home_advantage,
-        include_leaderboard=args.leaderboard,
-    )
-    print(json.dumps(report, indent=2))
+    if args.games_file:
+        new_games = load_box_scores(args.games_file, fmt=args.format)
+        report = build_batch_rating_update_report(
+            new_games,
+            history=history,
+            k_factor=args.k_factor,
+            home_advantage=args.home_advantage,
+            include_leaderboard=args.leaderboard,
+        )
+    else:
+        missing = [
+            name
+            for name, value in (
+                ("--home", args.home),
+                ("--away", args.away),
+                ("--home-score", args.home_score),
+                ("--away-score", args.away_score),
+            )
+            if value is None
+        ]
+        if missing:
+            print(
+                "update-ratings: provide --games-file or "
+                + ", ".join(missing),
+                file=sys.stderr,
+            )
+            return 2
+        played_on = date.fromisoformat(args.played_on) if args.played_on else None
+        game = BoxScore(
+            home=args.home,
+            away=args.away,
+            home_score=args.home_score,
+            away_score=args.away_score,
+            played_on=played_on,
+        )
+        report = build_rating_update_report(
+            game,
+            history=history,
+            k_factor=args.k_factor,
+            home_advantage=args.home_advantage,
+            include_leaderboard=args.leaderboard,
+        )
+    if args.output == "table":
+        print(format_rating_update_table(report))
+    else:
+        print(json.dumps(report, indent=2))
     return 0
 
 

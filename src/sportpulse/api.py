@@ -15,7 +15,11 @@ from sportpulse.parsers import (
     import_box_scores_with_audit,
     load_box_scores,
 )
-from sportpulse.ratings import build_rating_update_report, build_ratings_leaderboard
+from sportpulse.ratings import (
+    build_batch_rating_update_report,
+    build_rating_update_report,
+    build_ratings_leaderboard,
+)
 
 
 class SportPulseHandler(BaseHTTPRequestHandler):
@@ -181,22 +185,33 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     "true",
                     "yes",
                 )
-                played_on_param = params.get("played_on", [None])[0]
-                played_on = date.fromisoformat(played_on_param) if played_on_param else None
-                game = BoxScore(
-                    home=params["home"][0],
-                    away=params["away"][0],
-                    home_score=int(params["home_score"][0]),
-                    away_score=int(params["away_score"][0]),
-                    played_on=played_on,
-                )
-                report = build_rating_update_report(
-                    game,
-                    history=history,
-                    k_factor=k_factor,
-                    home_advantage=home_advantage,
-                    include_leaderboard=include_leaderboard,
-                )
+                games_file = params.get("games_file", [None])[0]
+                if games_file:
+                    new_games = load_box_scores(games_file)
+                    report = build_batch_rating_update_report(
+                        new_games,
+                        history=history,
+                        k_factor=k_factor,
+                        home_advantage=home_advantage,
+                        include_leaderboard=include_leaderboard,
+                    )
+                else:
+                    played_on_param = params.get("played_on", [None])[0]
+                    played_on = date.fromisoformat(played_on_param) if played_on_param else None
+                    game = BoxScore(
+                        home=params["home"][0],
+                        away=params["away"][0],
+                        home_score=int(params["home_score"][0]),
+                        away_score=int(params["away_score"][0]),
+                        played_on=played_on,
+                    )
+                    report = build_rating_update_report(
+                        game,
+                        history=history,
+                        k_factor=k_factor,
+                        home_advantage=home_advantage,
+                        include_leaderboard=include_leaderboard,
+                    )
             except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
                 self._send_json(400, {"error": str(exc)})
                 return

@@ -144,6 +144,23 @@ def test_ratings_update_endpoint_requires_game_params():
     assert "error" in payload
 
 
+def test_ratings_update_endpoint_batch_mode():
+    history_file = EXAMPLES_DIR / "season.json"
+    path = (
+        f"/ratings/update?history={history_file}"
+        f"&games_file={history_file}&leaderboard=1"
+    )
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["games_replayed"] == 4
+    assert payload["games_applied"] == 4
+    assert len(payload["game_updates"]) == 4
+    assert "Lakers" in payload["net_changes"]
+    assert len(payload["ratings"]) == 5
+
+
 def test_standings_endpoint_returns_table():
     history_file = EXAMPLES_DIR / "season.json"
     path = f"/standings?file={history_file}"

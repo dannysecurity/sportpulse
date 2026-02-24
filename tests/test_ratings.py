@@ -6,8 +6,10 @@ from sportpulse.cli import main
 from sportpulse.parsers import load_box_scores
 from sportpulse.ratings import (
     apply_game_to_ratings,
+    build_batch_rating_update_report,
     build_rating_update_report,
     build_ratings_leaderboard,
+    format_rating_update_table,
     format_ratings_table,
     rank_elo_ratings,
     replay_elo_ratings,
@@ -190,3 +192,99 @@ def test_cli_update_ratings_json(capsys):
     assert '"before"' in output
     assert '"after"' in output
     assert '"played_on": "2026-02-01"' in output
+
+
+def test_build_batch_rating_update_report_matches_full_replay():
+    history = load_box_scores(EXAMPLES_DIR / "season.json")
+    new_games = [
+        BoxScore("Lakers", "Celtics", 120, 100, date(2026, 2, 1)),
+        BoxScore("Warriors", "Heat", 110, 105, date(2026, 2, 2)),
+    ]
+
+    batch = build_batch_rating_update_report(
+        new_games,
+        history=history,
+        include_leaderboard=True,
+    )
+    combined = build_ratings_leaderboard(history + new_games)
+
+    assert batch["games_replayed"] == 4
+    assert batch["games_applied"] == 2
+    assert len(batch["game_updates"]) == 2
+    for team in ("Lakers", "Celtics", "Warriors", "Heat"):
+        assert batch["net_changes"][team]["after"] == combined["ratings"][
+            next(
+                i
+                for i, row in enumerate(combined["ratings"])
+                if row["team"] == team
+            )
+        ]["rating"]
+
+
+def test_build_batch_rating_update_report_orders_undated_games_last():
+    history = load_box_scores(EXAMPLES_DIR / "season.json")
+    dated = BoxScore("Lakers", "Celtics", 120, 100, date(2026, 2, 3))
+    undated = BoxScore("Warriors", "Heat", 110, 105)
+
+    chronological = build_batch_rating_update_report(
+        [dated, undated],
+        history=history,
+    )
+    reversed_input = build_batch_rating_update_report(
+        [undated, dated],
+        history=history,
+    )
+
+    assert chronological["net_changes"] == reversed_input["net_changes"]
+
+
+def test_format_rating_update_table_single_and_batch():
+    history = load_box_scores(EXAMPLES_DIR / "season.json")
+    single = build_rating_update_report(
+        BoxScore("Lakers", "Celtics", 120, 100, date(2026, 2, 1)),
+        history=history,
+    )
+    batch = build_batch_rating_update_report(
+        [
+            BoxScore("Lakers", "Celtics", 120, 100, date(2026, 2, 1)),
+            BoxScore("Warriors", "Heat", 110, 105, date(2026, 2, 2)),
+        ],
+        history=history,
+    )
+
+    single_table = format_rating_update_table(single)
+    batch_table = format_rating_update_table(batch)
+
+    assert "ELO update" in single_table
+    assert "Lakers" in single_table
+    assert "BEFORE" in single_table
+    assert "ELO batch update" in batch_table
+    assert "Net change:" in batch_table
+    assert "Game 1:" in batch_table
+    assert "Game 2:" in batch_table
+
+
+def test_cli_update_ratings_batch_table(capsys):
+    exit_code = main(
+        [
+            "update-ratings",
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--games-file",
+            str(EXAMPLES_DIR / "season.json"),
+            "--output",
+            "table",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "ELO batch update" in output
+    assert "Net change:" in output
+
+
+def test_cli_update_ratings_requires_game_or_file(capsys):
+    exit_code = main(["update-ratings"])
+
+    assert exit_code == 2
+    assert "update-ratings:" in capsys.readouterr().err
