@@ -78,6 +78,10 @@ sportpulse matchups --file examples/matchups.json --history examples/season.json
 sportpulse today --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --format compact
 
+# One-line slate digest (favorite counts, avg O/U, notable matchups)
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --format summary
+
 sportpulse matchups --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --format csv
 

@@ -98,7 +98,7 @@ def _add_matchups_options(parser: argparse.ArgumentParser) -> None:
         "--format",
         choices=MATCHUPS_FORMAT_OPTIONS,
         default="json",
-        help="Output format (json, table, compact, or csv)",
+        help="Output format (json, table, compact, csv, or summary)",
     )
 
 

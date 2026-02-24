@@ -19,8 +19,8 @@ from sportpulse.projections import (
 
 _matchups_cache: dict[str, tuple[int, int, list[Matchup]]] = {}
 
-MatchupsFormat = Literal["json", "table", "compact", "csv"]
-FORMAT_OPTIONS: tuple[MatchupsFormat, ...] = ("json", "table", "compact", "csv")
+MatchupsFormat = Literal["json", "table", "compact", "csv", "summary"]
+FORMAT_OPTIONS: tuple[MatchupsFormat, ...] = ("json", "table", "compact", "csv", "summary")
 
 
 @dataclass(frozen=True)
@@ -699,6 +699,45 @@ def format_matchups_csv(report: dict[str, object]) -> str:
     return buffer.getvalue().rstrip("\n")
 
 
+def _format_single_day_summary(report: dict[str, object]) -> str:
+    """Render a one-line odds-lite slate digest for daily CLI use."""
+    matchups = report.get("matchups", [])
+    if not isinstance(matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    lines = [_matchups_title(report)]
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games"):
+        lines.append(_format_slate_summary(summary))
+    elif not matchups:
+        lines.append("No games scheduled for this slate.")
+    return "\n".join(lines)
+
+
+def _format_multi_day_summary(report: dict[str, object]) -> str:
+    """Render a one-line odds-lite digest for a multi-day window."""
+    slates = report.get("slates")
+    if not isinstance(slates, list):
+        raise ValueError("report slates must be a list")
+
+    lines = [_matchups_title(report)]
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games"):
+        lines.append(_format_range_summary(summary))
+    elif not any(
+        isinstance(slate, dict) and slate.get("matchups") for slate in slates
+    ):
+        lines.append("No games scheduled for this window.")
+    return "\n".join(lines)
+
+
+def format_matchups_summary(report: dict[str, object]) -> str:
+    """Render title plus a one-line odds-lite slate digest."""
+    if "slates" in report:
+        return _format_multi_day_summary(report)
+    return _format_single_day_summary(report)
+
+
 def format_matchups_report(report: dict[str, object], fmt: MatchupsFormat) -> str:
     """Dispatch matchups formatting to the requested output type."""
     if fmt == "table":
@@ -707,6 +746,8 @@ def format_matchups_report(report: dict[str, object], fmt: MatchupsFormat) -> st
         return format_matchups_compact(report)
     if fmt == "csv":
         return format_matchups_csv(report)
+    if fmt == "summary":
+        return format_matchups_summary(report)
     raise ValueError(f"unsupported matchups format: {fmt}")
 
 

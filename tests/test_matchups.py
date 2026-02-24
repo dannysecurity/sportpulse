@@ -11,6 +11,7 @@ from sportpulse.matchups import (
     format_matchups_compact,
     format_matchups_csv,
     format_matchups_report,
+    format_matchups_summary,
     format_matchups_table,
     last_slate_date,
     load_matchups,
@@ -282,6 +283,51 @@ def test_format_matchups_report_dispatches_formats():
     assert "SPREAD" in format_matchups_report(report, "table")
     assert "|" in format_matchups_report(report, "compact")
     assert format_matchups_report(report, "csv").startswith("date,")
+    assert format_matchups_report(report, "summary").startswith("2026-01-16")
+
+
+def test_format_matchups_summary_one_line():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    report = build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+    )
+
+    summary = format_matchups_summary(report)
+    lines = summary.splitlines()
+
+    assert len(lines) == 2
+    assert lines[0] == "2026-01-16 — 2 game(s)"
+    assert lines[1].startswith("Slate:")
+    assert "home fav" in lines[1]
+    assert "avg O/U" in lines[1]
+    assert "biggest spread:" in lines[1]
+    assert "closest:" in lines[1]
+
+
+def test_cli_today_summary(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--format",
+            "summary",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    lines = output.strip().splitlines()
+    assert len(lines) == 2
+    assert "2026-01-16 — 2 game(s)" in lines[0]
+    assert lines[1].startswith("Slate:")
 
 
 def test_build_matchups_report_for_date():
