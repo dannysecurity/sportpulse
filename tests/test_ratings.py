@@ -104,6 +104,28 @@ def test_cli_ratings_table(capsys):
     assert "Lakers" in output
 
 
+def test_build_rating_update_report_includes_pre_game_expectations():
+    game = BoxScore("Lakers", "Celtics", 112, 108, date(2026, 2, 1))
+    report = build_rating_update_report(game)
+
+    home = report["updates"]["Lakers"]
+    away = report["updates"]["Celtics"]
+    assert home["expected"] == 0.5
+    assert away["expected"] == 0.5
+    assert round(home["expected"] + away["expected"], 3) == 1.0
+
+
+def test_build_rating_update_report_expectations_reflect_home_advantage():
+    game = BoxScore("Lakers", "Celtics", 112, 108, date(2026, 2, 1))
+    report = build_rating_update_report(game, home_advantage=65.0)
+
+    home = report["updates"]["Lakers"]
+    away = report["updates"]["Celtics"]
+    assert home["expected"] > 0.5
+    assert away["expected"] < 0.5
+    assert round(home["expected"] + away["expected"], 3) == 1.0
+
+
 def test_build_rating_update_report_bootstraps_from_defaults():
     game = BoxScore("Lakers", "Celtics", 112, 108, date(2026, 2, 1))
     report = build_rating_update_report(game)

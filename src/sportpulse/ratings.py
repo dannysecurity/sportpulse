@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sportpulse.boxscore import BoxScore, chronological_order
-from sportpulse.elo import EloCalculator
+from sportpulse.elo import EloCalculator, expected_score
 from sportpulse.models import EloRating
 
 DEFAULT_STARTING_RATING = 1500.0
@@ -60,12 +60,20 @@ def rank_elo_ratings(ratings: dict[str, EloRating]) -> list[dict[str, object]]:
     return rows
 
 
-def _team_update_entry(before: float, after: float) -> dict[str, object]:
-    return {
+def _team_update_entry(
+    before: float,
+    after: float,
+    *,
+    expected: float | None = None,
+) -> dict[str, object]:
+    entry: dict[str, object] = {
         "before": before,
         "after": after,
         "delta": round(after - before, 1),
     }
+    if expected is not None:
+        entry["expected"] = round(expected, 3)
+    return entry
 
 
 def apply_game_to_ratings(
@@ -82,6 +90,10 @@ def apply_game_to_ratings(
         game.away, EloRating(team=game.away, rating=DEFAULT_STARTING_RATING)
     ).rating
 
+    adj_home = home_before + calculator.home_advantage
+    expected_home = expected_score(adj_home, away_before)
+    expected_away = 1.0 - expected_home
+
     new_home, new_away = calculator.apply_result(
         ratings,
         game.home,
@@ -91,8 +103,12 @@ def apply_game_to_ratings(
         game.played_on,
     )
     return {
-        game.home: _team_update_entry(home_before, new_home),
-        game.away: _team_update_entry(away_before, new_away),
+        game.home: _team_update_entry(
+            home_before, new_home, expected=expected_home
+        ),
+        game.away: _team_update_entry(
+            away_before, new_away, expected=expected_away
+        ),
     }
 
 
