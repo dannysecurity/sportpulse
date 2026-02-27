@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from sportpulse.models import GameResult
+import sportpulse.schedule as schedule_module
 from sportpulse.schedule import Schedule, clear_schedule_cache, load_team_schedule
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
@@ -64,6 +65,21 @@ def test_load_team_schedule_reuses_cache_until_file_changes(tmp_path: Path):
     reloaded = load_team_schedule(path, "Lakers")
     assert reloaded is not first
     assert reloaded.record() == {"wins": 0, "losses": 1, "ties": 0}
+
+
+def test_load_team_schedule_cache_is_parameterized_by_fmt(tmp_path: Path):
+    clear_schedule_cache()
+    path = tmp_path / "season.json"
+    path.write_text(
+        '[{"home":"Lakers","away":"Celtics","home_score":110,"away_score":105,'
+        '"played_on":"2026-01-10"}]',
+        encoding="utf-8",
+    )
+
+    load_team_schedule(path, "Lakers", fmt="json")
+    load_team_schedule(path, "Lakers", fmt=None)
+
+    assert len(schedule_module._schedule_cache) == 2
 
 
 def test_load_team_schedule_cache_is_per_team(tmp_path: Path):

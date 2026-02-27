@@ -16,7 +16,7 @@ from sportpulse.stats import (
     point_differential_in_range,
 )
 
-_schedule_cache: dict[tuple[str, str], tuple[int, int, Schedule]] = {}
+_schedule_cache: dict[tuple[str, str, str | None], tuple[int, int, Schedule]] = {}
 
 
 def clear_schedule_cache() -> None:
@@ -36,8 +36,9 @@ def schedule_from_scores(team: str, scores: list[BoxScore]) -> Schedule:
 def load_team_schedule(path: Path | str, team: str, *, fmt: str | None = None) -> Schedule:
     """Load a team's schedule from a box score file.
 
-    Built schedules are cached in-process keyed by resolved path, team, and
-    file modification time so repeated loads skip disk I/O and rebuilding.
+    Built schedules are cached in-process keyed by resolved path, team, format
+    hint, and file modification time so repeated loads skip disk I/O and
+    rebuilding.
     """
     file_path = Path(path)
     if not file_path.is_file():
@@ -45,7 +46,7 @@ def load_team_schedule(path: Path | str, team: str, *, fmt: str | None = None) -
 
     resolved_path = file_path.resolve()
     stat = resolved_path.stat()
-    cache_key = (str(resolved_path), team)
+    cache_key = (str(resolved_path), team, fmt)
     cached = _schedule_cache.get(cache_key)
     if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
         return cached[2]
