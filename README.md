@@ -392,6 +392,8 @@ When the API server is running (`sportpulse serve --port 8080`), the sample seas
 ```bash
 curl "http://127.0.0.1:8080/standings?file=examples/season.json"
 curl "http://127.0.0.1:8080/ratings?file=examples/season.json"
+curl "http://127.0.0.1:8080/today?date=2026-01-16"
+curl "http://127.0.0.1:8080/matchups?date=2026-01-16&days=2"
 curl "http://127.0.0.1:8080/import-boxscores?file=examples/historical_export.json"
 curl "http://127.0.0.1:8080/import-boxscores?file=examples/historical_export.csv&audit=1"
 ```

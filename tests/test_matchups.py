@@ -819,9 +819,12 @@ def test_cli_today_multi_day_window(capsys):
 
     assert exit_code == 0
     output = capsys.readouterr().out
-    assert "2026-01-16 — 2026-01-17 (2 days)" in output
+    assert "Today 2026-01-16 — 2026-01-17 (2 days)" in output
     assert "Knicks @ Celtics" in output
     assert "Nuggets @ Lakers" in output
+    assert "CONF" in output
+    assert "PICK" in output
+    assert "--- 2026-01-16 ---" in output
 
 
 def test_cli_matchups_days_must_be_positive(capsys):

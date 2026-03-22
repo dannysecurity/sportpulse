@@ -202,20 +202,16 @@ def build_board_highlights(games: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
-def build_board_report(
-    matchups_report: dict[str, object],
+def _annotate_and_filter_games(
+    raw_matchups: list[object],
     *,
-    sort_by: BoardSort = "spread",
-    min_spread: float | None = None,
-    confidence: ConfidenceTier | None = None,
-    toss_up_threshold: float = _TOSS_UP_SPREAD,
-    strong_threshold: float = _STRONG_SPREAD,
-) -> dict[str, object]:
-    """Transform a matchups report into a sorted game-day board."""
-    raw_matchups = matchups_report.get("matchups", [])
-    if not isinstance(raw_matchups, list):
-        raise ValueError("report matchups must be a list")
-
+    sort_by: BoardSort,
+    min_spread: float | None,
+    confidence: ConfidenceTier | None,
+    toss_up_threshold: float,
+    strong_threshold: float,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Return (annotated_games, sorted_filtered_games) for board rendering."""
     annotated = [
         annotate_board_game(
             game,
@@ -231,6 +227,31 @@ def build_board_report(
         confidence=confidence,
     )
     sorted_games = sort_board_games(filtered, sort_by)
+    return annotated, sorted_games
+
+
+def build_board_report(
+    matchups_report: dict[str, object],
+    *,
+    sort_by: BoardSort = "spread",
+    min_spread: float | None = None,
+    confidence: ConfidenceTier | None = None,
+    toss_up_threshold: float = _TOSS_UP_SPREAD,
+    strong_threshold: float = _STRONG_SPREAD,
+) -> dict[str, object]:
+    """Transform a matchups report into a sorted game-day board."""
+    raw_matchups = matchups_report.get("matchups", [])
+    if not isinstance(raw_matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    annotated, sorted_games = _annotate_and_filter_games(
+        raw_matchups,
+        sort_by=sort_by,
+        min_spread=min_spread,
+        confidence=confidence,
+        toss_up_threshold=toss_up_threshold,
+        strong_threshold=strong_threshold,
+    )
 
     board: dict[str, object] = dict(matchups_report)
     board["matchups"] = sorted_games
@@ -245,21 +266,137 @@ def build_board_report(
     return board
 
 
-def _board_title(report: dict[str, object]) -> str:
-    matchups = report.get("matchups", [])
-    count = len(matchups) if isinstance(matchups, list) else 0
-    label = report.get("title_label", "Board")
-    if not isinstance(label, str) or not label:
-        label = "Board"
-    title = f"{label} {report['date']} — {count} game(s)"
+def build_multi_day_board_report(
+    matchups_report: dict[str, object],
+    *,
+    sort_by: BoardSort = "spread",
+    min_spread: float | None = None,
+    confidence: ConfidenceTier | None = None,
+    toss_up_threshold: float = _TOSS_UP_SPREAD,
+    strong_threshold: float = _STRONG_SPREAD,
+) -> dict[str, object]:
+    """Transform a multi-day matchups report into board-annotated daily slates."""
+    slates = matchups_report.get("slates")
+    if not isinstance(slates, list):
+        raise ValueError("report slates must be a list")
+
+    board_slates: list[dict[str, object]] = []
+    all_shown: list[dict[str, object]] = []
+    games_total = 0
+
+    for slate in slates:
+        if not isinstance(slate, dict):
+            continue
+        raw_matchups = slate.get("matchups", [])
+        if not isinstance(raw_matchups, list):
+            continue
+        annotated, sorted_games = _annotate_and_filter_games(
+            raw_matchups,
+            sort_by=sort_by,
+            min_spread=min_spread,
+            confidence=confidence,
+            toss_up_threshold=toss_up_threshold,
+            strong_threshold=strong_threshold,
+        )
+        games_total += len(annotated)
+        all_shown.extend(sorted_games)
+        board_slates.append(
+            {
+                "date": slate.get("date", ""),
+                "matchups": sorted_games,
+                "summary": slate.get("summary", {}),
+                "board": {
+                    "games_shown": len(sorted_games),
+                    "games_total": len(annotated),
+                },
+            }
+        )
+
+    report: dict[str, object] = dict(matchups_report)
+    report["slates"] = board_slates
+    report["board"] = {
+        "sort": sort_by,
+        "min_spread": min_spread,
+        "confidence_filter": confidence,
+        "highlights": build_board_highlights(all_shown),
+        "games_shown": len(all_shown),
+        "games_total": games_total,
+    }
+    return report
+
+
+def build_today_board_report(
+    matchups_report: dict[str, object],
+    *,
+    sort_by: BoardSort = "time",
+    min_spread: float | None = None,
+    confidence: ConfidenceTier | None = None,
+    toss_up_threshold: float = _TOSS_UP_SPREAD,
+    strong_threshold: float = _STRONG_SPREAD,
+) -> dict[str, object]:
+    """Build a today-style board from a single- or multi-day matchups report."""
+    if "slates" in matchups_report:
+        report = build_multi_day_board_report(
+            matchups_report,
+            sort_by=sort_by,
+            min_spread=min_spread,
+            confidence=confidence,
+            toss_up_threshold=toss_up_threshold,
+            strong_threshold=strong_threshold,
+        )
+    else:
+        report = build_board_report(
+            matchups_report,
+            sort_by=sort_by,
+            min_spread=min_spread,
+            confidence=confidence,
+            toss_up_threshold=toss_up_threshold,
+            strong_threshold=strong_threshold,
+        )
+    report["title_label"] = "Today"
+    return report
+
+
+def _append_slate_banner(title: str, report: dict[str, object]) -> str:
     if report.get("advanced_to_next_slate"):
         requested = report.get("requested_date")
         if isinstance(requested, str):
-            title = f"{title}  (requested {requested}, next slate)"
-    elif report.get("advanced_to_last_slate"):
+            return f"{title}  (requested {requested}, next slate)"
+    if report.get("advanced_to_last_slate"):
         requested = report.get("requested_date")
         if isinstance(requested, str):
-            title = f"{title}  (requested {requested}, last slate)"
+            return f"{title}  (requested {requested}, last slate)"
+    return title
+
+
+def _board_label(report: dict[str, object]) -> str:
+    label = report.get("title_label", "Board")
+    if not isinstance(label, str) or not label:
+        return "Board"
+    return label
+
+
+def _board_title(report: dict[str, object]) -> str:
+    matchups = report.get("matchups", [])
+    count = len(matchups) if isinstance(matchups, list) else 0
+    label = _board_label(report)
+    title = f"{label} {report['date']} — {count} game(s)"
+    title = _append_slate_banner(title, report)
+    team_filter = report.get("team_filter")
+    if isinstance(team_filter, str):
+        title = f"{title}  [{team_filter}]"
+    return title
+
+
+def _multi_day_board_title(report: dict[str, object]) -> str:
+    summary = report.get("summary")
+    games = summary.get("games", 0) if isinstance(summary, dict) else 0
+    start = report.get("start_date", "")
+    end = report.get("end_date", "")
+    days = report.get("days", 1)
+    label = _board_label(report)
+    title = f"{label} {start} — {end} ({days} days) — {games} game(s)"
+    title = _append_slate_banner(title, report)
     team_filter = report.get("team_filter")
     if isinstance(team_filter, str):
         title = f"{title}  [{team_filter}]"
@@ -308,16 +445,34 @@ def _confidence_badge(tier: object) -> str:
     return "---"
 
 
-def format_board_table(report: dict[str, object]) -> str:
-    """Render the board as a fixed-width terminal table."""
-    matchups = report.get("matchups", [])
-    if not isinstance(matchups, list):
-        raise ValueError("report matchups must be a list")
+def _format_window_summary(summary: dict[str, object]) -> str:
+    """Render a one-line digest for a multi-day odds-lite window."""
+    games = summary.get("games", 0)
+    if not isinstance(games, int) or games == 0:
+        return ""
 
-    lines = [_board_title(report), ""]
+    days = summary.get("days", 0)
+    days_with_games = summary.get("days_with_games", 0)
+    parts = [f"{days_with_games}/{days} days with games"]
+    parts.append(f"{summary['home_favorites']} home fav")
+    parts.append(f"{summary['away_favorites']} away fav")
+    if summary.get("pick_em_games"):
+        parts.append(f"{summary['pick_em_games']} pick'em")
+    if summary.get("has_scoring_projections") and summary.get("avg_projected_total") is not None:
+        parts.append(f"avg O/U {summary['avg_projected_total']}")
+    return "Window: " + ", ".join(parts)
+
+
+def _append_board_table_rows(
+    lines: list[str],
+    matchups: list[object],
+    *,
+    start_index: int = 1,
+) -> int:
+    """Append board table rows and return the next game index."""
     if not matchups:
         lines.append("No games on the board for this slate.")
-        return "\n".join(lines)
+        return start_index
 
     show_totals = any(
         isinstance(game, dict) and "projected_total" in game for game in matchups
@@ -339,7 +494,8 @@ def format_board_table(report: dict[str, object]) -> str:
         header = f"{'TIME':>5} {header}"
     lines.extend([header, "-" * len(header)])
 
-    for index, game in enumerate(matchups, start=1):
+    index = start_index
+    for game in matchups:
         if not isinstance(game, dict):
             continue
         label = f"{game['away']} @ {game['home']}"
@@ -361,6 +517,21 @@ def format_board_table(report: dict[str, object]) -> str:
             start = str(game.get("start_time") or "--:--")
             row = f"{start:>5} {row}"
         lines.append(row)
+        index += 1
+    return index
+
+
+def format_board_table(report: dict[str, object]) -> str:
+    """Render the board as a fixed-width terminal table."""
+    if "slates" in report:
+        return _format_multi_day_board_table(report)
+
+    matchups = report.get("matchups", [])
+    if not isinstance(matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    lines = [_board_title(report), ""]
+    _append_board_table_rows(lines, matchups)
 
     highlight_line = _format_highlights(report)
     if highlight_line:
@@ -368,18 +539,55 @@ def format_board_table(report: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_board_compact(report: dict[str, object]) -> str:
-    """Render one odds-lite line per game."""
-    matchups = report.get("matchups", [])
-    if not isinstance(matchups, list):
-        raise ValueError("report matchups must be a list")
+def _format_multi_day_board_table(report: dict[str, object]) -> str:
+    slates = report.get("slates")
+    if not isinstance(slates, list):
+        raise ValueError("report slates must be a list")
 
-    lines = [_board_title(report)]
-    if not matchups:
-        lines.append("No games on the board for this slate.")
+    lines = [_multi_day_board_title(report), ""]
+    if not slates:
+        lines.append("No games on the board for this window.")
         return "\n".join(lines)
 
-    for index, game in enumerate(matchups, start=1):
+    game_number = 1
+    for index, slate in enumerate(slates):
+        if not isinstance(slate, dict):
+            continue
+        matchups = slate.get("matchups", [])
+        if not isinstance(matchups, list):
+            continue
+        if index > 0:
+            lines.append("")
+        slate_date = slate.get("date", "")
+        lines.append(f"--- {slate_date} ---")
+        game_number = _append_board_table_rows(
+            lines,
+            matchups,
+            start_index=game_number,
+        )
+
+    highlight_line = _format_highlights(report)
+    summary = report.get("summary")
+    footer_parts: list[str] = []
+    if highlight_line:
+        footer_parts.append(highlight_line)
+    if isinstance(summary, dict) and summary.get("games"):
+        window_line = _format_window_summary(summary)
+        if window_line:
+            footer_parts.append(window_line)
+    if footer_parts:
+        lines.extend(["", *footer_parts])
+    return "\n".join(lines)
+
+
+def _append_board_compact_lines(
+    lines: list[str],
+    matchups: list[object],
+    *,
+    start_index: int = 1,
+) -> int:
+    index = start_index
+    for game in matchups:
         if not isinstance(game, dict):
             continue
         label = f"{game['away']} @ {game['home']}"
@@ -395,6 +603,25 @@ def format_board_compact(report: dict[str, object]) -> str:
         if isinstance(start, str) and start:
             line = f"{start} {line}"
         lines.append(line)
+        index += 1
+    return index
+
+
+def format_board_compact(report: dict[str, object]) -> str:
+    """Render one odds-lite line per game."""
+    if "slates" in report:
+        return _format_multi_day_board_compact(report)
+
+    matchups = report.get("matchups", [])
+    if not isinstance(matchups, list):
+        raise ValueError("report matchups must be a list")
+
+    lines = [_board_title(report)]
+    if not matchups:
+        lines.append("No games on the board for this slate.")
+        return "\n".join(lines)
+
+    _append_board_compact_lines(lines, matchups)
 
     highlight_line = _format_highlights(report)
     if highlight_line:
@@ -402,31 +629,47 @@ def format_board_compact(report: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def format_board_csv(report: dict[str, object]) -> str:
-    """Render the board as CSV for spreadsheets."""
-    matchups = report.get("matchups", [])
-    if not isinstance(matchups, list):
-        raise ValueError("report matchups must be a list")
+def _format_multi_day_board_compact(report: dict[str, object]) -> str:
+    slates = report.get("slates")
+    if not isinstance(slates, list):
+        raise ValueError("report slates must be a list")
 
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(
-        [
-            "date",
-            "start_time",
-            "away",
-            "home",
-            "board_pick",
-            "board_confidence",
-            "home_spread",
-            "home_win_prob",
-            "away_win_prob",
-            "home_moneyline",
-            "away_moneyline",
-            "projected_total",
-        ]
-    )
-    slate_date = report.get("date", "")
+    lines = [_multi_day_board_title(report)]
+    if not slates:
+        lines.append("No games on the board for this window.")
+        return "\n".join(lines)
+
+    game_number = 1
+    for slate in slates:
+        if not isinstance(slate, dict):
+            continue
+        matchups = slate.get("matchups", [])
+        if not isinstance(matchups, list) or not matchups:
+            continue
+        slate_date = slate.get("date", "")
+        lines.append(f"--- {slate_date} ---")
+        game_number = _append_board_compact_lines(
+            lines,
+            matchups,
+            start_index=game_number,
+        )
+
+    highlight_line = _format_highlights(report)
+    if highlight_line:
+        lines.append(highlight_line)
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games"):
+        window_line = _format_window_summary(summary)
+        if window_line:
+            lines.append(window_line)
+    return "\n".join(lines)
+
+
+def _write_board_csv_rows(
+    writer: csv.writer,
+    slate_date: str,
+    matchups: list[object],
+) -> None:
     for game in matchups:
         if not isinstance(game, dict):
             continue
@@ -446,6 +689,46 @@ def format_board_csv(report: dict[str, object]) -> str:
                 game.get("projected_total", ""),
             ]
         )
+
+
+def format_board_csv(report: dict[str, object]) -> str:
+    """Render the board as CSV for spreadsheets."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "date",
+            "start_time",
+            "away",
+            "home",
+            "board_pick",
+            "board_confidence",
+            "home_spread",
+            "home_win_prob",
+            "away_win_prob",
+            "home_moneyline",
+            "away_moneyline",
+            "projected_total",
+        ]
+    )
+
+    if "slates" in report:
+        slates = report.get("slates")
+        if not isinstance(slates, list):
+            raise ValueError("report slates must be a list")
+        for slate in slates:
+            if not isinstance(slate, dict):
+                continue
+            matchups = slate.get("matchups", [])
+            if not isinstance(matchups, list):
+                continue
+            _write_board_csv_rows(writer, str(slate.get("date", "")), matchups)
+    else:
+        matchups = report.get("matchups", [])
+        if not isinstance(matchups, list):
+            raise ValueError("report matchups must be a list")
+        _write_board_csv_rows(writer, str(report.get("date", "")), matchups)
+
     return buffer.getvalue().rstrip("\n")
 
 

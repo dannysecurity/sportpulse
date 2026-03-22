@@ -10,6 +10,7 @@ from sportpulse.board import (
     SORT_OPTIONS as BOARD_SORT_OPTIONS,
     BoardFormat,
     build_board_report,
+    build_today_board_report,
     format_board_report,
 )
 from sportpulse.boxscore import BoxScore
@@ -475,21 +476,19 @@ def cmd_today(args: argparse.Namespace) -> int:
         return error_code
 
     board_fmt = _today_board_format(args.format)
-    use_board = board_fmt is not None and "slates" not in report
-
-    if use_board:
-        board_report = build_board_report(
+    if board_fmt is not None:
+        board_report = build_today_board_report(
             report,
             sort_by=args.sort,
             min_spread=args.min_spread,
             confidence=args.confidence,
         )
-        board_report["title_label"] = "Today"
         if args.format == "json":
             print(json.dumps(board_report, indent=2))
         else:
             print(format_board_report(board_report, board_fmt))
-        games_shown = board_report.get("board", {}).get("games_shown")
+        board = board_report.get("board")
+        games_shown = board.get("games_shown") if isinstance(board, dict) else None
         if games_shown == 0:
             return 1
         return 0

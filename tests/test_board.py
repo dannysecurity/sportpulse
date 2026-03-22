@@ -5,6 +5,8 @@ from sportpulse.board import (
     annotate_board_game,
     build_board_highlights,
     build_board_report,
+    build_multi_day_board_report,
+    build_today_board_report,
     classify_confidence,
     filter_board_games,
     format_board_compact,
@@ -236,3 +238,63 @@ def test_load_matchups_parses_start_time(tmp_path: Path):
     matchups = load_matchups(path)
 
     assert matchups[0].start_time == "19:30"
+
+
+def _multi_day_report():
+    matchups = load_matchups(EXAMPLES_DIR / "matchups.json")
+    scores = load_box_scores(EXAMPLES_DIR / "season.json")
+    return build_matchups_report(
+        matchups,
+        on_date=date(2026, 1, 16),
+        history=scores,
+        days=2,
+    )
+
+
+def test_build_multi_day_board_report_annotates_all_slates():
+    report = build_multi_day_board_report(_multi_day_report(), sort_by="time")
+
+    assert len(report["slates"]) == 2
+    assert report["board"]["games_shown"] == 3
+    for slate in report["slates"]:
+        for game in slate["matchups"]:
+            assert "board_pick" in game
+            assert "board_confidence" in game
+
+
+def test_build_today_board_report_sets_title_label():
+    report = build_today_board_report(_multi_day_report(), sort_by="time")
+
+    assert report["title_label"] == "Today"
+    assert report["board"]["games_shown"] == 3
+
+
+def test_format_board_table_multi_day_shows_confidence_and_sections():
+    report = build_today_board_report(_multi_day_report(), sort_by="time")
+    table = format_board_table(report)
+
+    assert "Today 2026-01-16 — 2026-01-17 (2 days)" in table
+    assert "--- 2026-01-16 ---" in table
+    assert "--- 2026-01-17 ---" in table
+    assert "CONF" in table
+    assert "Highlights:" in table
+    assert "Window:" in table
+
+
+def test_format_board_csv_multi_day_includes_all_games():
+    report = build_today_board_report(_multi_day_report(), sort_by="time")
+    csv_text = format_board_csv(report)
+
+    lines = csv_text.splitlines()
+    assert len(lines) == 4
+    assert "2026-01-16" in csv_text
+    assert "2026-01-17" in csv_text
+
+
+def test_format_board_compact_multi_day():
+    report = build_today_board_report(_multi_day_report(), sort_by="time")
+    compact = format_board_compact(report)
+
+    assert "--- 2026-01-16 ---" in compact
+    assert "--- 2026-01-17 ---" in compact
+    assert compact.count("@") == 3

@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 from sportpulse.boxscore import BoxScore
 from sportpulse.config import resolve_matchups_paths
+from sportpulse.board import build_today_board_report
 from sportpulse.elo import EloCalculator
 from sportpulse.schedule_cache import load_matchups_report, load_standings_report
 from sportpulse.parsers import (
@@ -120,6 +121,77 @@ class SportPulseHandler(BaseHTTPRequestHandler):
                     advance_if_empty=advance_if_empty,
                     team=team,
                     days=days,
+                )
+            except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            self._send_json(200, report)
+            return
+
+        if parsed.path == "/today":
+            params = parse_qs(parsed.query)
+            try:
+                file_param = params.get("file", [None])[0]
+                history_param = params.get("history", [None])[0]
+                config_param = params.get("config", [None])[0]
+                paths = resolve_matchups_paths(
+                    matchups_file=file_param,
+                    history_file=history_param,
+                    config_file=config_param,
+                )
+                on_date = date.fromisoformat(params.get("date", [date.today().isoformat()])[0])
+                k_factor = float(params.get("k_factor", [str(paths.k_factor)])[0])
+                home_advantage = float(
+                    params.get("home_advantage", [str(paths.home_advantage)])[0]
+                )
+                points_per_100_elo = float(
+                    params.get(
+                        "points_per_100_elo",
+                        [str(paths.points_per_100_elo)],
+                    )[0]
+                )
+                home_court_points = float(
+                    params.get(
+                        "home_court_points",
+                        [str(paths.home_court_points)],
+                    )[0]
+                )
+                advance_if_empty = params.get("next", ["1"])[0].lower() in ("1", "true", "yes")
+                team = params.get("team", [None])[0]
+                days = int(params.get("days", ["1"])[0])
+                if days < 1:
+                    raise ValueError("days must be at least 1")
+                sort_by = params.get("sort", ["time"])[0]
+                if sort_by not in ("spread", "confidence", "total", "matchup", "time"):
+                    raise ValueError(
+                        "sort must be spread, confidence, total, matchup, or time"
+                    )
+                min_spread_param = params.get("min_spread", [None])[0]
+                min_spread = float(min_spread_param) if min_spread_param is not None else None
+                confidence = params.get("confidence", [None])[0]
+                if confidence is not None and confidence not in (
+                    "toss_up",
+                    "lean",
+                    "strong",
+                ):
+                    raise ValueError("confidence must be toss_up, lean, or strong")
+                report = load_matchups_report(
+                    paths.matchups_file,
+                    on_date=on_date,
+                    history_file=paths.history_file,
+                    k_factor=k_factor,
+                    home_advantage=home_advantage,
+                    points_per_100_elo=points_per_100_elo,
+                    home_court_points=home_court_points,
+                    advance_if_empty=advance_if_empty,
+                    team=team,
+                    days=days,
+                )
+                report = build_today_board_report(
+                    report,
+                    sort_by=sort_by,  # type: ignore[arg-type]
+                    min_spread=min_spread,
+                    confidence=confidence,  # type: ignore[arg-type]
                 )
             except (KeyError, IndexError, ValueError, FileNotFoundError) as exc:
                 self._send_json(400, {"error": str(exc)})

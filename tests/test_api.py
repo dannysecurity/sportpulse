@@ -107,6 +107,54 @@ def test_matchups_endpoint_advances_to_next_slate():
     assert payload["advanced_to_next_slate"] is True
 
 
+def test_today_endpoint_returns_board_projections():
+    matchups_file = EXAMPLES_DIR / "matchups.json"
+    history_file = EXAMPLES_DIR / "season.json"
+    path = (
+        f"/today?file={matchups_file}&history={history_file}&date=2026-01-16"
+    )
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["title_label"] == "Today"
+    assert payload["date"] == "2026-01-16"
+    assert "board" in payload
+    game = payload["matchups"][0]
+    assert "board_pick" in game
+    assert "board_confidence" in game
+    assert payload["board"]["games_shown"] == 2
+
+
+def test_today_endpoint_multi_day_board():
+    matchups_file = EXAMPLES_DIR / "matchups.json"
+    history_file = EXAMPLES_DIR / "season.json"
+    path = (
+        f"/today?file={matchups_file}&history={history_file}"
+        f"&date=2026-01-16&days=2&sort=time"
+    )
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["title_label"] == "Today"
+    assert payload["days"] == 2
+    assert len(payload["slates"]) == 2
+    assert payload["board"]["games_shown"] == 3
+    assert payload["slates"][0]["matchups"][0]["board_pick"]
+
+
+def test_today_endpoint_defaults_to_advancing_empty_slate():
+    matchups_file = EXAMPLES_DIR / "matchups.json"
+    path = f"/today?file={matchups_file}&date=2026-01-15"
+
+    status, payload = _dispatch_get(path)
+
+    assert status == 200
+    assert payload["advanced_to_next_slate"] is True
+    assert payload["date"] == "2026-01-16"
+
+
 def test_matchups_endpoint_team_filter():
     matchups_file = EXAMPLES_DIR / "matchups.json"
     path = f"/matchups?file={matchups_file}&date=2026-01-17&team=Lakers"
