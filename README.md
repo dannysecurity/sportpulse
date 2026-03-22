@@ -70,6 +70,17 @@ sportpulse matchups --file examples/matchups.json --history examples/season.json
 # Zero-flag today board when sportpulse.json is present (auto-discovers examples/)
 sportpulse today --date 2026-01-16
 
+# Today's slate sorted by start time with picks and confidence tiers (default)
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16
+
+# Sort by spread magnitude or filter to strong favorites
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --sort spread
+
+sportpulse today --file examples/matchups.json --history examples/season.json \
+  --date 2026-01-16 --confidence strong
+
 # Same slate in a terminal-friendly table
 sportpulse matchups --file examples/matchups.json --history examples/season.json \
   --date 2026-01-16 --format table

@@ -1,6 +1,8 @@
 from datetime import date
 from pathlib import Path
 
+import json
+
 from sportpulse.boxscore import BoxScore
 from sportpulse.cli import main
 from sportpulse.matchups import (
@@ -519,8 +521,79 @@ def test_cli_today_defaults_to_table(capsys):
 
     assert exit_code == 0
     output = capsys.readouterr().out
+    assert "Today 2026-01-16" in output
     assert "SPREAD" in output
+    assert "PICK" in output
+    assert "CONF" in output
     assert '"home_win_prob"' not in output
+
+
+def test_cli_today_sorts_by_time(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--sort",
+            "time",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    knicks_pos = output.index("Knicks @ Celtics")
+    heat_pos = output.index("Heat @ Warriors")
+    assert knicks_pos < heat_pos
+
+
+def test_cli_today_filters_by_confidence(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--confidence",
+            "lean",
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Today 2026-01-16" in output
+    assert "LN " in output
+    assert output.count("@") == output.count("LN ")
+
+
+def test_cli_today_json_includes_board_metadata(capsys):
+    exit_code = main(
+        [
+            "today",
+            "--file",
+            str(EXAMPLES_DIR / "matchups.json"),
+            "--history",
+            str(EXAMPLES_DIR / "season.json"),
+            "--date",
+            "2026-01-16",
+            "--format",
+            "json",
+        ]
+    )
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["title_label"] == "Today"
+    assert "board" in output
+    game = output["matchups"][0]
+    assert "board_pick" in game
+    assert "board_confidence" in game
 
 
 def test_cli_matchups_next_flag(capsys):

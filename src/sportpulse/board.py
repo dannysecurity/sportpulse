@@ -248,7 +248,10 @@ def build_board_report(
 def _board_title(report: dict[str, object]) -> str:
     matchups = report.get("matchups", [])
     count = len(matchups) if isinstance(matchups, list) else 0
-    title = f"Board {report['date']} — {count} game(s)"
+    label = report.get("title_label", "Board")
+    if not isinstance(label, str) or not label:
+        label = "Board"
+    title = f"{label} {report['date']} — {count} game(s)"
     if report.get("advanced_to_next_slate"):
         requested = report.get("requested_date")
         if isinstance(requested, str):

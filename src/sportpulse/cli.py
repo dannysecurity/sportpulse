@@ -8,6 +8,7 @@ from datetime import date
 from sportpulse.board import (
     FORMAT_OPTIONS as BOARD_FORMAT_OPTIONS,
     SORT_OPTIONS as BOARD_SORT_OPTIONS,
+    BoardFormat,
     build_board_report,
     format_board_report,
 )
@@ -310,6 +311,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_matchups_options(today)
     today.set_defaults(format="table", next=True)
+    today.add_argument(
+        "--sort",
+        choices=BOARD_SORT_OPTIONS,
+        default="time",
+        help="Sort order for today's slate (default: start time)",
+    )
+    today.add_argument(
+        "--min-spread",
+        type=float,
+        default=None,
+        help="Only show games with at least this spread magnitude",
+    )
+    today.add_argument(
+        "--confidence",
+        choices=("toss_up", "lean", "strong"),
+        default=None,
+        help="Only show games in this confidence tier",
+    )
 
     board = sub.add_parser(
         "board",
@@ -432,6 +451,49 @@ def cmd_matchups(args: argparse.Namespace) -> int:
     report, error_code = _load_matchups_report_from_args(args)
     if error_code is not None:
         return error_code
+    if args.format == "json":
+        print(json.dumps(report, indent=2))
+    else:
+        print(format_matchups_report(report, args.format))
+
+    summary = report.get("summary")
+    if isinstance(summary, dict) and summary.get("games", 0) == 0:
+        return 1
+    return 0
+
+
+def _today_board_format(fmt: str) -> BoardFormat | None:
+    if fmt in BOARD_FORMAT_OPTIONS:
+        return fmt  # type: ignore[return-value]
+    return None
+
+
+def cmd_today(args: argparse.Namespace) -> int:
+    """Show today's slate with sortable odds-lite picks and confidence tiers."""
+    report, error_code = _load_matchups_report_from_args(args)
+    if error_code is not None:
+        return error_code
+
+    board_fmt = _today_board_format(args.format)
+    use_board = board_fmt is not None and "slates" not in report
+
+    if use_board:
+        board_report = build_board_report(
+            report,
+            sort_by=args.sort,
+            min_spread=args.min_spread,
+            confidence=args.confidence,
+        )
+        board_report["title_label"] = "Today"
+        if args.format == "json":
+            print(json.dumps(board_report, indent=2))
+        else:
+            print(format_board_report(board_report, board_fmt))
+        games_shown = board_report.get("board", {}).get("games_shown")
+        if games_shown == 0:
+            return 1
+        return 0
+
     if args.format == "json":
         print(json.dumps(report, indent=2))
     else:
@@ -595,7 +657,7 @@ def main(argv: list[str] | None = None) -> int:
         "update-ratings": cmd_update_ratings,
         "standings": cmd_standings,
         "matchups": cmd_matchups,
-        "today": cmd_matchups,
+        "today": cmd_today,
         "board": cmd_board,
     }
     return handlers[args.command](args)
